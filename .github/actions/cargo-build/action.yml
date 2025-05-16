@@ -1,0 +1,158 @@
+name: "🏗️ Compile: Rust crate/workspace"
+description: "Uses 'cargo' to compile the root project with caching enabled."
+
+inputs:
+  manifest:
+    description: "A path to the project's 'Cargo.toml'."
+    required: false
+    default: "Cargo.toml"
+  profile:
+    description: "Build the project with the specified optimization profile."
+    required: false
+    default: "release"
+  platform:
+    description: "Compile the project for the target platform (defaults to host triple)."
+    required: false
+  features:
+    description: "A comma- or new line-separated list of project features to build."
+    required: false
+    default: "all"
+  targets:
+    description: "A comma- or new line-separated list of project targets to build (e.g. lib or bins)."
+    required: false
+    default: "all"
+  use_cross:
+    description: "Whether to use 'cross' for compilation."
+    required: false
+    default: false
+  skip_cache:
+    description: "Whether to skip caching of artifacts."
+    required: false
+    default: false
+  extra_args:
+    description: "Additional arguments to pass to the build command."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Define common 'rust' properties
+      id: rs-props
+      shell: bash
+      run: |
+        RUSTC_VERSION="$(rustc --version | sed 's/rustc \(.*\) (.*/\1/')"
+        echo "rustc=$RUSTC_VERSION" >> $GITHUB_OUTPUT
+        echo "set rustc=$RUSTC_VERSION"
+
+        PY_RELPATH='import os,sys; print(os.path.relpath(sys.stdin.read()))'
+        CRATE_DIR="$(echo $(dirname ${{ inputs.manifest }}) | python3 -c "$PY_RELPATH")"
+        echo "crate_dir=$CRATE_DIR" >> $GITHUB_OUTPUT
+        echo "set crate_dir=$CRATE_DIR"
+
+        HOST_TRIPLE="$(rustc -v --version | grep host | sed 's/.*[ ]//')"
+        PLATFORM="$(t="${{ inputs.platform }}"; echo "${t:-$HOST_TRIPLE}")"
+        echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
+        echo "set platform=$PLATFORM"
+
+    - name: Cache 'cargo' home directory
+      id: cache-cargo-home
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+      if: inputs.skip_cache != 'true'
+      with:
+        key: cache-cargo-home-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-${{ inputs.use_cross }}-${{ hashFiles('.github/workflows/**') }}
+        path: |
+          ~/.cargo/.crates.toml
+          ~/.cargo/.crates2.json
+          ~/.cargo/bin
+        restore-keys: |
+          cache-cargo-home-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-${{ inputs.use_cross }}-
+          cache-cargo-home-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-home-${{ runner.os }}-
+
+    - name: Cache 'cargo' registry
+      id: cache-cargo-registry
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+      if: inputs.skip_cache != 'true'
+      with:
+        key: cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-${{ hashFiles('Cargo.lock') }}
+        path: |
+          ~/.cargo/git/db/
+          ~/.cargo/registry
+        restore-keys: |
+          cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-
+          cache-cargo-registry-${{ runner.os }}-
+
+    - name: Cache 'cargo' build artifacts
+      id: cache-cargo-build
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+      if: inputs.skip_cache != 'true'
+      with:
+        key: cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-${{ hashFiles('src/**/*.rs', 'Cargo.toml', 'Cargo.lock', '.cargo/config.toml') }}
+        path: |
+          ${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml
+          ${{ steps.rs-props.outputs.crate_dir }}/target
+          ${{ steps.rs-props.outputs.crate_dir }}/vendor
+        restore-keys: |
+          cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-
+
+    - name: Install 'cross' for cross-compilation
+      if: |
+        inputs.use_cross == 'true' &&
+        steps.cache-cargo-home.outputs.cache-hit != 'true' &&
+        steps.cache-cargo-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install --force cross --git https://github.com/cross-rs/cross
+
+    - name: Vendor project dependencies
+      if: |
+        steps.cache-cargo-registry.outputs.cache-hit != 'true' ||
+        steps.cache-cargo-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cargo vendor \
+          --manifest-path=${{ inputs.manifest }}
+
+        mkdir -p "${{ steps.rs-props.outputs.crate_dir }}/.cargo"
+
+        cat > "${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml" << EOM
+        [source.crates-io]
+        replace-with = "vendored-sources"
+
+        [source.vendored-sources]
+        directory = "vendor"
+        EOM
+
+    - name: Compile the project
+      if: steps.cache-cargo-build.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        TARGETS=()
+        case "${{ inputs.targets }}" in
+        "" | "*" | "all" | "all-targets") TARGETS+=("--all-targets") ;;
+        *)
+          for t in $(printf "${{ inputs.targets }}" | tr ',' \\n); do
+            TARGETS+=("--$t")
+          done
+          ;;
+        esac
+
+        FEATURES=""
+        case "${{ inputs.features }}" in
+        "" | "*" | "all" | "all-features") FEATURES="--all-features" ;;
+        *) FEATURES="$(printf "${{ inputs.features }}" | tr \\n ',')" ;;
+        esac
+
+        CMD=$([[ "${{ inputs.use_cross }}" == "true" ]] && echo cross || echo cargo)
+
+        $CMD build \
+          --frozen \
+          --manifest-path=${{ inputs.manifest }} \
+          --offline \
+          --profile=${{ inputs.profile }} \
+          --target=${{ steps.rs-props.outputs.platform }} \
+          "${TARGETS[@]}" \
+          "${FEATURES}" \
+          $(echo "${{ inputs.extra_args }}" | tr '\n' ' ')

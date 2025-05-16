@@ -1,0 +1,35 @@
+name: "🗒️ Parse: Rust version"
+description: "Parse the rust version specified from a 'Cargo.toml' manifest file."
+
+inputs:
+  manifest:
+    description: "A path to the 'Cargo.toml' manifest to parse."
+    required: true
+  strict:
+    description: "Whether to fail if 'rust_version' is not specified."
+    required: false
+    default: true
+
+outputs:
+  version:
+    description: "The 'rust_version' specified in the 'Cargo.toml' manifest."
+    value: ${{ steps.parse-config.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Parse Rust version from 'Cargo.toml'
+      id: parse-config
+      shell: bash
+      run: |
+        RUST_VERSION=$(
+          cargo metadata --manifest-path ${{ inputs.manifest }} --format-version 1 |
+          python3 -c "import json,sys;print(next(filter(lambda p: p.get('name', '') == 'baproto', json.load(sys.stdin)['packages']))['rust_version'])"
+        )
+
+        if [[ "${{ inputs.strict }}" == "true" && -z "$RUST_VERSION" ]]; then
+          echo "Missing 'rust_version': ${{ inputs.manifest }}"
+          exit 1
+        fi
+
+        echo "version=$RUST_VERSION" >> $GITHUB_OUTPUT
