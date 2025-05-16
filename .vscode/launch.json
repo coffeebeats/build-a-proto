@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug: application",
+      "cargo": {
+        "args": ["build", "--bin=baproto", "--package=baproto"],
+        "filter": {
+          "name": "baproto",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "BAPROTO_HOME": "${workspaceFolder}/.baproto"
+      }
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug: unit tests",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=baproto", "--package=baproto"],
+        "filter": {
+          "name": "baproto",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

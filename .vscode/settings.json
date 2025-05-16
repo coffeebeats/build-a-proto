@@ -1,0 +1,22 @@
+{
+  /* ----------------------------- Settings: Debug ---------------------------- */
+
+  "debug.allowBreakpointsEverywhere": true,
+
+  /* ------------------------------ Settings: Git ----------------------------- */
+
+  "git.branchProtection": ["main"],
+
+  /* --------------------------- Settings: Markdown --------------------------- */
+
+  "markdownlint.config": {
+    "MD024": {
+      "siblings_only": true
+    }
+  },
+
+  /* ------------------------- Settings: rust-analyzer ------------------------ */
+
+  "rust-analyzer.imports.granularity.enforce": true,
+  "rust-analyzer.imports.granularity.group": "item"
+}
