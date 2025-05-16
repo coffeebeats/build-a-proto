@@ -6,14 +6,14 @@ Compiles the specified build-a-proto definition files into language-specific bin
 
 ### Usage
 
-`baproto compile [OPTIONS] <PATH>...`
+`baproto compile [OPTIONS] <--cpp|--gdscript> <FILES>...`
 
 ### Options
 
-- `--cpp` — generate c++ bindings (cannot be specified with other languages; default=`true`)
-- `--gdscript` — generate GDScript bindings (cannot be specified with other languages; default=`false`)
-- `-o`, `--out` — a directory in which to write generated bindings to
+- `--cpp` — generate c++ bindings
+- `--gdscript` — generate GDScript bindings
+- `-o`, `--out <OUT_DIR>` — a directory in which to write generated bindings to
 
 ### Arguments
 
-- `<PATH>` — one or more filepaths to build-a-proto definitions
+- `<FILES>` — one or more filepaths to build-a-proto definitions
