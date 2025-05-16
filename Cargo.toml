@@ -1,0 +1,13 @@
+[package]
+  name         = "baproto"
+  version      = "0.1.0"
+  description  = "An interface definition language (IDL) compiler for creating custom, bit-level binary encodings with an emphasis on supporting networked simulations."
+  edition      = "2024"
+  rust-version = "1.87.0"
+
+[dependencies]
+  anyhow = "1.0.98"
+  clap   = {version = "4.5.38", features = ["cargo", "derive"]}
+
+[dev-dependencies]
+  rstest = {version = "0.25.0", default-features = false}
