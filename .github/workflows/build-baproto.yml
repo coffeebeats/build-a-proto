@@ -1,0 +1,118 @@
+name: "📦 Build: 'baproto'"
+
+on:
+  workflow_call:
+    inputs:
+      # Required
+      archive-name:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      os:
+        type: string
+        required: true
+
+      # Optional
+      timeout:
+        required: false
+        type: number
+        default: 4
+      use_cross:
+        required: false
+        type: boolean
+        default: false
+
+  # Triggered from the UI; see
+  # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#workflow_dispatch.
+  workflow_dispatch:
+    inputs:
+      # Required
+      archive-name:
+        required: true
+        type: string
+      target:
+        required: true
+        type: choice
+        options:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+          - aarch64-unknown-linux-gnu
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
+          - x86_64-pc-windows-msvc
+      os:
+        required: true
+        type: choice
+        options:
+          - "ubuntu-latest"
+          - "macos-latest"
+          - "windows-latest"
+
+      # Optional
+      timeout:
+        required: false
+        type: number
+        default: 4
+      use_cross:
+        required: false
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: ${{ fromJSON(inputs.timeout) }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: "./.github/actions/setup-rust"
+        id: setup-rust
+        with:
+          profile: minimal
+          version-file: Cargo.toml
+          targets: ${{ inputs.target }}
+
+      # Set minimum supported version to '11.1', which guarantees support for
+      # M1 macs (see https://developer.apple.com/support/xcode).
+      - name: Set OSX environment variables
+        if: endsWith(inputs.target, 'apple-darwin')
+        run: |
+          echo "SDKROOT=$(xcrun -sdk macosx11.1 --show-sdk-path)" >> $GITHUB_ENV
+          echo "MACOSX_DEPLOYMENT_TARGET=11.1" >> $GITHUB_ENV
+
+      - uses: "./.github/actions/cargo-build"
+        with:
+          profile: release
+          platform: ${{ inputs.target }}
+          targets: bins
+          use_cross: ${{ inputs.use_cross }}
+
+      - name: Archive executable (Default)
+        if: runner.os != 'Windows'
+        run: |
+          tar \
+          -C "target/${{ inputs.target }}/release" \
+          -czf ${{ inputs.archive-name }} \
+          "baproto"
+
+      - name: Archive executable (Default)
+        if: runner.os == 'Windows'
+        run: |
+          cat <<- EOM | python3 -c "$(</dev/stdin)"
+          from zipfile import ZipFile
+          with ZipFile("${{ inputs.archive-name }}", mode="w") as a:
+            a.write("target/${{ inputs.target }}/release/baproto.exe", arcname="baproto.exe")
+          EOM
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ inputs.target }}
+          path: ${{ inputs.archive-name }}
+          if-no-files-found: error

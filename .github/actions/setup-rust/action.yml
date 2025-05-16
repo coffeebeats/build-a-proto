@@ -1,0 +1,104 @@
+name: "🦀 Set up: Rust toolchain"
+description: "Overrides the Rust environment installed to the runner."
+
+inputs:
+  version:
+    description: "The toolchain version string to pass to 'rustup' (e.g. 1.68.2 or nightly)."
+    required: true
+  version-file:
+    description: "Parse the rust version from the provided 'Cargo.toml' manifest file."
+    required: false
+    default: ""
+  profile:
+    description: "Specify a 'rustup' profile during installation."
+    required: false
+    default: default
+  components:
+    description: "A comma- or new line-separated list of additional components to install."
+    required: false
+    default: ""
+  targets:
+    description: "A comma- or new line-separated list of compilation targets to add."
+    required: false
+    default: ""
+  override:
+    description: "Whether to activate the installed toolchain in the current directory."
+    required: false
+    default: true
+
+outputs:
+  cargo_version:
+    description: "Current 'cargo' version"
+    value: ${{ steps.check-active-toolchain.outputs.cargo_version }}
+  rustc_version:
+    description: "Current 'rustc' version"
+    value: ${{ steps.check-active-toolchain.outputs.rustc_version }}
+  rustup_version:
+    description: "Current 'rustup' version"
+    value: ${{ steps.check-active-toolchain.outputs.rustup_version }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: "./.github/actions/parse-rust-version"
+      if: inputs.version-file != ''
+      id: parse-config
+      with:
+        manifest: ${{ inputs.version-file }}
+
+    - name: Install rust (stable)
+      id: install
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        if [[ ! -z "${{ inputs.version-file }}" ]]; then
+          if [[ ! -z "${{ inputs.version }}" ]]; then
+            echo "cannot specify both 'version' and 'version-file'"
+            exit 1
+          fi
+
+          VERSION="${{ steps.parse-config.outputs.version }}"
+        fi
+
+        if [[ -z "$VERSION" ]]; then
+          echo "missing Rust version; specify either 'version' or 'version-file'"
+          exit 1
+        fi
+
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+        CMD=("rustup toolchain install $VERSION")
+
+        CMD+=("--allow-downgrade")
+        CMD+=("--no-self-update")
+        CMD+=("--profile ${{ inputs.profile }}")
+
+        for c in $(printf "${{ inputs.components }}" | tr ',' \\n); do
+          CMD+=("--component $c")
+        done
+
+        CMD="${CMD[@]}"
+        $CMD
+
+    - name: Add additional compilation targets
+      if: inputs.targets != ''
+      shell: bash
+      run: |
+        for t in $(printf "${{ inputs.targets }}" | tr ',' \\n); do
+          rustup target add --toolchain ${{ steps.install.outputs.version }} $t
+        done
+
+    - name: Activate the installed toolchain
+      if: inputs.override != 'false'
+      shell: bash
+      run: rustup override set ${{ steps.install.outputs.version }}
+
+    - name: Display the active toolchain
+      id: check-active-toolchain
+      shell: bash
+      run: |
+        rustup show
+
+        echo "cargo_version=$(cargo --version)" >> $GITHUB_OUTPUT
+        echo "rustc_version=$(rustc --version)" >> $GITHUB_OUTPUT
+        echo "rustup_version=$(rustup --version)" >> $GITHUB_OUTPUT

@@ -1,0 +1,124 @@
+name: "🚀 Release: 'baproto'"
+
+on:
+  push:
+    branches:
+      - main
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      release-created: ${{ steps.release.outputs.releases_created }}
+      release-tag: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        id: release
+        with:
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+          # NOTE: A PAT is used so that workflows can run on the new, automatically
+          # created pull requests. This circumvents GitHub's recursive workflow
+          # protections, which block automated pull requests from triggering workflows
+          # under the same default GitHub Actions token.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+          # NOTE: To handle releases on specific branches (e.g. a '1.X' release branch),
+          # simply change the "branches" filter in the workflow's on-"push" trigger.
+          target-branch: ${{ github.ref_name }}
+
+  build:
+    needs: ["release-please"]
+    if: needs.release-please.outputs.release-created == 'true'
+
+    uses: "./.github/workflows/build-baproto.yml"
+    with:
+      archive-name: ${{ matrix.archive }}
+      target: ${{ matrix.target }}
+      os: ${{ matrix.os }}
+      use_cross: ${{ matrix.use_cross == true }}
+      timeout: 15
+
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Apple
+          - archive: baproto-${{ needs.release-please.outputs.release-tag }}-macos-arm64.tar.gz
+            target: aarch64-apple-darwin
+            os: macos-latest
+          - archive: baproto-${{ needs.release-please.outputs.release-tag }}-macos-x86_64.tar.gz
+            target: x86_64-apple-darwin
+            os: macos-latest
+
+          # Linux
+          - archive: baproto-${{ needs.release-please.outputs.release-tag }}-linux-x86_64.tar.gz
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: false
+          - archive: baproto-${{ needs.release-please.outputs.release-tag }}-linux-arm64.tar.gz
+            target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: false
+
+          # Windows
+          - archive: baproto-${{ needs.release-please.outputs.release-tag }}-windows-x86_64.zip
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+  publish:
+    needs: ["release-please", "build"]
+    if: needs.release-please.outputs.release-created == 'true'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+
+    env:
+      FILENAME_CHECKSUMS: "checksums.txt"
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: ${{ runner.temp }}/assets
+
+      - name: Generate checksums file
+        working-directory: ${{ runner.temp }}/assets
+        run: |
+          checksum() {
+            if [[ "${{ runner.os }}" == "macOS" ]]; then
+              shasum -a 256 "$@"
+            else
+              sha256sum "$@"
+            fi
+          }
+
+          for artifact in $(ls); do
+            echo "$(cd $artifact && checksum $(ls))" >> ${{ env.FILENAME_CHECKSUMS }}
+          done
+
+      - name: Attach assets to release
+        env:
+          # This is required to use the 'gh' CLI in actions.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ASSETS=(
+            ${{ runner.temp }}/assets/*/baproto-${{ needs.release-please.outputs.release-tag }}*
+            ${{ runner.temp }}/assets/checksums.txt
+          )
+
+          for asset in "${ASSETS[@]}"; do
+            gh release upload \
+              --clobber \
+              ${{ needs.release-please.outputs.release-tag }} \
+              $asset
+          done
