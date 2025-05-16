@@ -1,5 +1,8 @@
 name: "📦 Build: 'baproto'"
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
