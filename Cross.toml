@@ -1,0 +1,5 @@
+# Target 'GLIBC 2.23' using 'zig cc' as a cross-compiler
+[target.aarch64-unknown-linux-gnu]
+  zig = "2.23"
+[target.x86_64-unknown-linux-gnu]
+  zig = "2.23"

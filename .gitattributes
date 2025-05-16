@@ -1,0 +1,14 @@
+# ----------------------------- Setting: Default ----------------------------- #
+# Automatically normalize line endings for all files by default.
+
+* text=auto
+
+# --------------------------- Setting: Always Unix --------------------------- #
+# Files that will always have LF line endings on checkout.
+
+*.sh text eol=lf
+
+# -------------------------- Setting: Always Windows ------------------------- #
+# Files that will always have CRLF line endings on checkout.
+
+# *.bat text eol=crlf
