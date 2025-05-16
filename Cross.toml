@@ -1,4 +1,4 @@
 [target.aarch64-unknown-linux-gnu]
-  zig = "2.31" # Target specific 'GLIBC' using 'zig cc' as a cross-compiler.
+  zig = "2.23" # Target specific 'GLIBC' using 'zig cc' as a cross-compiler.
 [target.x86_64-unknown-linux-gnu]
-  zig = "2.31" # Target specific 'GLIBC' using 'zig cc' as a cross-compiler.
+  zig = "2.23" # Target specific 'GLIBC' using 'zig cc' as a cross-compiler.
