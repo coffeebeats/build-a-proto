@@ -1,0 +1,219 @@
+name: "🤖 Check: 'baproto'"
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      has_change: "${{ steps.check-non-source.outputs.any_modified == 'true' || steps.check-source.outputs.any_modified == 'true' }}"
+      has_source_change: "${{ steps.check-source.outputs.any_modified == 'true' }}"
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Check for any non-source code changes
+        id: check-non-source
+        uses: tj-actions/changed-files@ed68ef82c095e0d48ec87eccea555d944a631a4c
+        with:
+          files: |
+            .github/actions/**
+            .github/workflows/**
+
+            Cargo.toml
+            Cargo.lock
+
+      - name: Check for any source code changes
+        id: check-source
+        uses: tj-actions/changed-files@ed68ef82c095e0d48ec87eccea555d944a631a4c
+        with:
+          files: |
+            src/**/*.rs
+
+  build:
+    needs: ["changes"]
+    if: needs.changes.outputs.has_change == 'true'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: "./.github/actions/setup-rust"
+        id: setup-rust
+        with:
+          version-file: Cargo.toml
+          profile: minimal
+
+      - uses: "./.github/actions/cargo-build"
+        with:
+          profile: release
+
+  format:
+    needs: ["changes"]
+    if: |
+      needs.changes.outputs.has_source_change == 'true' &&
+      github.actor != 'dependabot[bot]'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          # Checkout the "head_ref" (i.e. PR branch HEAD) in case a commit is
+          # later needed. See https://github.com/stefanzweifel/git-auto-commit-action
+          # for more details.
+          ref: ${{ github.head_ref }}
+          # Use a PAT so that GitHub Actions will trigger on the resulting commit.
+          token: ${{ secrets.ACTIONS_BOT }}
+
+      - uses: "./.github/actions/setup-rust"
+        id: setup-rust
+        with:
+          version-file: Cargo.toml
+          profile: minimal
+          components: rustfmt
+
+      - name: Check Rust source formatting
+        id: format
+        continue-on-error: true
+        run: cargo fmt --check
+
+      - name: Fix formatting of source code
+        if: steps.format.outcome == 'failure'
+        run: |
+          cargo fmt
+
+          # See https://github.com/orgs/community/discussions/26560#discussioncomment-3531273
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+          git add --all '*.rs'
+          git commit -m "chore: fix formatting (on behalf of '${{ github.triggering_actor }}')"
+
+          git push
+
+      - name: Terminate CI run early
+        if: steps.format.outcome == 'failure'
+        run: exit 1
+
+  lint:
+    needs: ["changes", "build", "format"]
+    if: needs.changes.outputs.has_source_change == 'true'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: "./.github/actions/setup-rust"
+        id: setup-rust
+        with:
+          version-file: Cargo.toml
+          profile: minimal
+          components: clippy
+
+      - uses: "./.github/actions/cargo-build"
+        with:
+          profile: release
+
+      - name: Lint 'rust' source
+        run: |
+          cargo clippy \
+            --all-features \
+            --all-targets \
+            --no-deps \
+            -- \
+              --deny=warnings
+
+  test:
+    needs: ["changes", "build"]
+    if: needs.changes.outputs.has_change == 'true'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: "./.github/actions/setup-rust"
+        id: setup-rust
+        with:
+          version-file: Cargo.toml
+          profile: minimal
+
+      - uses: "./.github/actions/cargo-build"
+        with:
+          profile: release
+
+      # See https://github.com/taiki-e/cargo-llvm-cov?tab=readme-ov-file#installation.
+      - name: Install 'cargo-llvm-cov'
+        if: needs.changes.outputs.has_source_change == 'true'
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Test source code (with coverage)
+        if: needs.changes.outputs.has_source_change == 'true'
+        run: |
+          cargo llvm-cov \
+            --frozen \
+            --release \
+            --target=x86_64-unknown-linux-gnu \
+            --all-features \
+            --all-targets \
+            --remap-path-prefix \
+            --codecov \
+            --output-path codecov.json
+
+      - name: Test source code
+        if: needs.changes.outputs.has_source_change != 'true'
+        run: |
+          cargo test \
+            --frozen \
+            --release \
+            --target=x86_64-unknown-linux-gnu \
+            --all-features \
+            --all-targets
+
+      - name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
+        if: needs.changes.outputs.has_source_change == 'true'
+        with:
+          fail_ci_if_error: true
+          files: codecov.json
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Used to ensure all branch protection requirements are met. This is a workaround until
+  # https://github.com/github-community/community/discussions/4324 is addressed.
+  branch_protection:
+    needs: ["build", "format", "lint", "test"]
+    if: ${{ always() }}
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+
+    steps:
+      - name: Verify status of dependencies
+        if: |
+          always() &&
+          (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+        run: exit 1
