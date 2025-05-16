@@ -66,11 +66,11 @@ jobs:
           - archive: baproto-${{ needs.release-please.outputs.release-tag }}-linux-x86_64.tar.gz
             target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            use_cross: false
+            use_cross: true
           - archive: baproto-${{ needs.release-please.outputs.release-tag }}-linux-arm64.tar.gz
             target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            use_cross: false
+            use_cross: true
 
           # Windows
           - archive: baproto-${{ needs.release-please.outputs.release-tag }}-windows-x86_64.zip
