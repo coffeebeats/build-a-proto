@@ -1,0 +1,50 @@
+// This is a top-level comment
+
+enum MessageType {
+    // This is an inner comment.
+
+    TYPE_1 = 0; // This is an inline comment.
+    TYPE_2 = 1;
+    TYPE_3 = 2;
+}
+
+type vec2<T = float32> = list[T];
+
+message Snapshot {
+    message Position {
+        f32 x, y, z;
+    }
+
+    bool is_valid;
+
+    // name is an example string
+    string name;
+
+    MessageType type;
+
+    Position pos = delta(Snapshot);
+
+    list[Position] = delta(self);
+
+    u8 field_name_1 = 8 bits;
+    u16 field_name_2 = 16 bits;
+    u32 field_name_3 = 32 bits;
+    u64 field_name_4 = 64 bits;
+    u64 field_name_5 = varint;
+
+    i8 field_name_6 = bits(8);
+    i16 field_name_7 = varint;
+    i32 field_name_8 = varint;
+    i64 field_name_9 = varint;
+
+    f32 field_name_10 = varint;
+    f64 field_name_11 = varint;
+
+    fixed32(2) field_name_12 = varint
+
+    vec2 field_name_13;
+    vec3 field_name_14;
+    vec4 field_name_15;
+
+    quat<float64> field_name_16;
+}
