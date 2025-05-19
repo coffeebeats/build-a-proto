@@ -8,43 +8,65 @@ enum MessageType {
     TYPE_3 = 2;
 }
 
-type vec2<T = float32> = list[T];
+// Encodings
+delta
+zig_zag
+quat_smallest_three
+omit_zero_value
+pad()
+
+// Sizing
+bits(n)
+bits(var)
+fixed(exp,mtsa)
 
 message Snapshot {
+    encoding zig_zag_vlq = [zigzag bits(var)];
+    encoding delta_zig_zag_vlq = [delta, zigzag, bits(var)];
+
     message Position {
         f32 x, y, z;
     }
-
-    bool is_valid;
 
     // name is an example string
     string name;
 
     MessageType type;
 
-    Position pos = delta(Snapshot);
+    Position pos = [delta, dead_reckon(0.02), pad(bytes(1))];
 
-    list[Position] = delta(self);
+    list<Position, 3> = delta;
 
-    u8 field_name_1 = 8 bits;
-    u16 field_name_2 = 16 bits;
-    u32 field_name_3 = 32 bits;
-    u64 field_name_4 = 64 bits;
-    u64 field_name_5 = varint;
+    bool field_name_0;
+    []MessageType message_types;
+
+    []bit field_name_01;
+    [2]bit field_name_01;
+
+    []byte field_name_01;
+    [2]byte field_name_01 = bits();
+
+    byte field_name_1 = bits(8);
+    u8 field_name_1 = bits(8);
+    u16 field_name_2 = bits(16);
+    u32 field_name_3 = bits(32);
+    u64 field_name_4 = bits(64);
+    u64 field_name_5 = bits(var);
 
     i8 field_name_6 = bits(8);
-    i16 field_name_7 = varint;
-    i32 field_name_8 = varint;
-    i64 field_name_9 = varint;
+    i16 field_name_7 = zig_zag_vlq;
+    i32 field_name_8 = zig_zag_vlq;
+    i64 field_name_9 = delta_zig_zag_vlq;
 
-    f32 field_name_10 = varint;
-    f64 field_name_11 = varint;
+    f32 field_name_10 = [delta, fixed(8, 4)];
+    f64 field_name_11 = 64 bits;
 
-    fixed32(2) field_name_12 = varint
+    [2]f32 field_name_13;
+    [4]f32 field_name_15 = [fixed(8,5)];
 
-    vec2 field_name_13;
-    vec3 field_name_14;
-    vec4 field_name_15;
+    [3]f32 position;
+    [3]f32 linear_velocity;
+    [3]f32 angular_velocity;
 
-    quat<float64> field_name_16;
+    [4]f64 field_name_16 = [quat.smallest_three];
 }
