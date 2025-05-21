@@ -6,8 +6,10 @@
   rust-version = "1.87.0"
 
 [dependencies]
-  anyhow = "1.0.98"
-  clap   = {version = "4.5.38", features = ["cargo", "derive"]}
+  anyhow      = "1.0.98"
+  chumsky     = {version = "0.10.1", features = ["lexical-numbers"]}
+  clap        = {version = "4.5.38", features = ["cargo", "derive"]}
+  derive_more = {version = "2.0.1", features = ["display"]}
 
 [dev-dependencies]
   rstest = {version = "0.25.0", default-features = false}

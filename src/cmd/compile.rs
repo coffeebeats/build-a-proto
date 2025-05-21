@@ -1,9 +1,8 @@
-use anyhow::Ok;
 use anyhow::anyhow;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::parser::parse;
+use crate::parse::lex;
 
 /* -------------------------------------------------------------------------- */
 /*                                Struct: Args                                */
@@ -45,6 +44,8 @@ pub struct Bindings {
 pub fn handle(args: Args) -> anyhow::Result<()> {
     let out_dir = parse_out_dir(args.out)?;
 
+    let mut failed: Vec<(PathBuf, Vec<_>)> = vec![];
+
     for path in args.files {
         println!(
             "Compiling {:?} into {:?} (binding={})",
@@ -55,12 +56,29 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
 
         let contents = std::fs::read_to_string(&path).map_err(|e| anyhow!(e))?;
 
-        if let Err(err) = parse(&contents) {
-            println!("Failed to parse contents of file: {:?}: {:?}", path, err);
+        match lex(&contents) {
+            Err(errs) => {
+                failed.push((path, errs.into_iter().map(|e| e.into_owned()).collect()));
+            }
+            Ok(_) => {
+                todo!()
+            }
+        };
+    }
+
+    if failed.is_empty() {
+        return Ok(());
+    }
+
+    for failure in failed {
+        println!("Failed to parse file: {:?}", failure.0);
+
+        for err in failure.1 {
+            println!("  {:?}", err);
         }
     }
 
-    Ok(())
+    Err(anyhow!("Compilation failed"))
 }
 
 /* -------------------------------------------------------------------------- */
