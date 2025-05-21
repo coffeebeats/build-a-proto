@@ -23,6 +23,7 @@ pub type Spanned<T> = (T, Span);
 /*                                 Enum: Token                                */
 /* -------------------------------------------------------------------------- */
 
+/// `Token` enumerates the set of potential tokens recognized by the parser.
 #[allow(dead_code)]
 #[derive(Clone, Debug, Display, PartialEq)]
 pub enum Token<'src> {
@@ -43,7 +44,6 @@ pub enum Token<'src> {
 
     // Whitespace
     Newline,
-    Space,
 
     // Input
     Comment(&'src str),
@@ -119,11 +119,6 @@ pub fn lexer<'src>()
         .map(|_| Token::Newline)
         .map_with(Token::with_span)
         .labelled("line break");
-    let space = inline_whitespace()
-        .at_least(1)
-        .map(|_| Token::Space)
-        .map_with(Token::with_span)
-        .labelled("space");
 
     // Input
 
@@ -162,7 +157,7 @@ pub fn lexer<'src>()
         ))
         .then_ignore(quote);
 
-    let comment = just("//").ignore_then(
+    let comment = just("//").then(inline_whitespace().at_most(1)).ignore_then(
         any()
             .and_is(newline().not())
             .repeated()
@@ -179,10 +174,11 @@ pub fn lexer<'src>()
     });
 
     let idl = choice((
-        string,  // Must be above line breaks to catch errors.
-        comment, // Must be above line break to detect end.
-        line_break, space, control, keyword, uint, identifier,
+        // NOTE: `string` and `comment` must be checked before `line_break` so
+        // that they may validate the full span of their potential input.
+        string, comment, line_break, control, keyword, uint, identifier,
     ))
+    .padded_by(inline_whitespace())
     .recover_with(skip_then_retry_until(any().ignored(), end()))
     .repeated()
     .collect();
@@ -232,7 +228,6 @@ mod tests {
         // Then: The output token list matches expectations.
         let tokens = vec![
             (Token::Keyword(Keyword::Package), Span::from(0..7)),
-            (Token::Space, Span::from(7..8)),
             (Token::String("abc.def"), Span::from(9..16)),
         ];
         assert_eq!(output.output(), Some(&tokens));
@@ -252,7 +247,6 @@ mod tests {
         // Then: The output token list matches expectations.
         let tokens = vec![
             (Token::Keyword(Keyword::Include), Span::from(0..7)),
-            (Token::Space, Span::from(7..8)),
             (
                 Token::String("../a//b/'path with spaces'/file.ext"),
                 Span::from(9..44),
@@ -274,8 +268,8 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![(
-            Token::Comment(" comment // that includes a comment"),
-            Span::from(2..37),
+            Token::Comment("comment // that includes a comment"),
+            Span::from(3..37),
         )];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -294,13 +288,9 @@ mod tests {
         // Then: The output token list matches expectations.
         let tokens = vec![
             (Token::Keyword(Keyword::Enum), Span::from(0..4)),
-            (Token::Space, Span::from(4..5)),
             (Token::Ident("SomeEnum"), Span::from(5..13)),
-            (Token::Space, Span::from(13..14)),
             (Token::BlockOpen, Span::from(14..15)),
-            (Token::Space, Span::from(15..16)),
             (Token::Newline, Span::from(16..17)),
-            (Token::Space, Span::from(17..18)),
             (Token::BlockClose, Span::from(18..19)),
         ];
         assert_eq!(output.output(), Some(&tokens));
@@ -320,13 +310,9 @@ mod tests {
         // Then: The output token list matches expectations.
         let tokens = vec![
             (Token::Keyword(Keyword::Message), Span::from(0..7)),
-            (Token::Space, Span::from(7..8)),
             (Token::Ident("SomeMessage"), Span::from(8..19)),
-            (Token::Space, Span::from(19..20)),
             (Token::BlockOpen, Span::from(20..21)),
-            (Token::Space, Span::from(21..22)),
             (Token::Newline, Span::from(22..23)),
-            (Token::Space, Span::from(23..24)),
             (Token::BlockClose, Span::from(24..25)),
         ];
         assert_eq!(output.output(), Some(&tokens));
@@ -366,7 +352,6 @@ mod tests {
         let tokens = vec![
             (Token::Uint(0), Span::from(0..1)),
             (Token::Colon, Span::from(1..2)),
-            (Token::Space, Span::from(2..3)),
             (Token::Ident("VARIANT_1"), Span::from(3..12)),
             (Token::Semicolon, Span::from(12..13)),
         ];
