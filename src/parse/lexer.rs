@@ -33,6 +33,7 @@ pub enum Token<'src> {
     BlockClose,
     BlockOpen,
     Colon,
+    Comma,
     Dot,
     Equal,
     FnClose,
@@ -91,15 +92,16 @@ pub fn lexer<'src>()
     // Syntax
 
     let control = choice((
-        just(':').map(|_| Token::Colon),
+        just(',').map(|_| Token::Comma),
         just(';').map(|_| Token::Semicolon),
-        just('=').map(|_| Token::Equal),
-        just(')').map(|_| Token::FnClose),
+        just(':').map(|_| Token::Colon),
         just('(').map(|_| Token::FnOpen),
-        just('{').map(|_| Token::BlockOpen),
-        just('}').map(|_| Token::BlockClose),
+        just(')').map(|_| Token::FnClose),
         just('[').map(|_| Token::ListOpen),
         just(']').map(|_| Token::ListClose),
+        just('{').map(|_| Token::BlockOpen),
+        just('}').map(|_| Token::BlockClose),
+        just('=').map(|_| Token::Equal),
     ))
     .map_with(Token::with_span);
 
