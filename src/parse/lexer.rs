@@ -212,7 +212,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has an error.
-        assert_eq!(output.has_errors(), true);
+        assert!(output.has_errors());
         assert_eq!(
             output.errors().collect::<Vec<_>>(),
             vec![&Rich::custom(Span::from(0..0), "missing input")]
@@ -232,7 +232,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -251,7 +251,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -273,7 +273,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![(
@@ -292,7 +292,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -314,7 +314,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -336,7 +336,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -355,7 +355,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -376,7 +376,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -399,7 +399,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
@@ -424,7 +424,7 @@ mod tests {
         let output = lexer().parse(input);
 
         // Then: The input has no errors.
-        assert_eq!(output.has_errors(), false);
+        assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
         let tokens = vec![
