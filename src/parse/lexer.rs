@@ -81,13 +81,20 @@ pub enum Keyword {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  Fn: Lexer                                 */
+/*                                   Fn: Lex                                  */
 /* -------------------------------------------------------------------------- */
+
+/// `lex` lexes an input string into [`Token`]s recognized by the parser.
+pub fn lex<'src>(input: &'src str) -> Result<Vec<Spanned<Token<'src>>>, Vec<Rich<'src, char>>> {
+    lexer().parse(input).into_result()
+}
+
+/* -------------------------------- Fn: lexer ------------------------------- */
 
 /// [lexer] creates a lexer which lexes an input string slice into a sequence
 /// of [`Token`]s.
 #[allow(dead_code)]
-pub fn lexer<'src>()
+fn lexer<'src>()
 -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
     // Syntax
 
