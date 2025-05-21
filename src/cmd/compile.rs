@@ -60,7 +60,9 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             Err(errs) => {
                 failed.push((path, errs.into_iter().map(|e| e.into_owned()).collect()));
             }
-            Ok(_) => {}
+            Ok(_) => {
+                todo!()
+            }
         };
     }
 
