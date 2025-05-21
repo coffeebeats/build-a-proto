@@ -359,4 +359,84 @@ mod tests {
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
+
+    #[test]
+    fn test_input_with_non_indexed_field_definition_returns_correct_token_list() {
+        // Given: An input string.
+        let input = "[key]value array_field;";
+
+        // When: The input is lexed.
+        let output = lexer().parse(input);
+
+        // Then: The input has no errors.
+        assert_eq!(output.has_errors(), false);
+
+        // Then: The output token list matches expectations.
+        let tokens = vec![
+            (Token::ListOpen, Span::from(0..1)),
+            (Token::Ident("key"), Span::from(1..4)),
+            (Token::ListClose, Span::from(4..5)),
+            (Token::Ident("value"), Span::from(5..10)),
+            (Token::Ident("array_field"), Span::from(11..22)),
+            (Token::Semicolon, Span::from(22..23)),
+        ];
+        assert_eq!(output.output(), Some(&tokens));
+    }
+
+    #[test]
+    fn test_input_with_indexed_field_definition_returns_correct_token_list() {
+        // Given: An input string.
+        let input = "1: [key]value array_field;";
+
+        // When: The input is lexed.
+        let output = lexer().parse(input);
+
+        // Then: The input has no errors.
+        assert_eq!(output.has_errors(), false);
+
+        // Then: The output token list matches expectations.
+        let tokens = vec![
+            (Token::Uint(1), Span::from(0..1)),
+            (Token::Colon, Span::from(1..2)),
+            (Token::ListOpen, Span::from(3..4)),
+            (Token::Ident("key"), Span::from(4..7)),
+            (Token::ListClose, Span::from(7..8)),
+            (Token::Ident("value"), Span::from(8..13)),
+            (Token::Ident("array_field"), Span::from(14..25)),
+            (Token::Semicolon, Span::from(25..26)),
+        ];
+        assert_eq!(output.output(), Some(&tokens));
+    }
+
+    #[test]
+    fn test_input_with_field_definition_with_encoding_returns_correct_token_list() {
+        // Given: An input string.
+        let input = "u8 array_field = [delta, bits(var(8))];";
+
+        // When: The input is lexed.
+        let output = lexer().parse(input);
+
+        // Then: The input has no errors.
+        assert_eq!(output.has_errors(), false);
+
+        // Then: The output token list matches expectations.
+        let tokens = vec![
+            (Token::Ident("u8"), Span::from(0..2)),
+            (Token::Ident("array_field"), Span::from(3..14)),
+            (Token::Equal, Span::from(15..16)),
+            (Token::ListOpen, Span::from(17..18)),
+            (Token::Ident("delta"), Span::from(18..23)),
+            (Token::Comma, Span::from(23..24)),
+            (Token::Ident("bits"), Span::from(25..29)),
+            (Token::FnOpen, Span::from(29..30)),
+            (Token::Ident("var"), Span::from(30..33)),
+            (Token::FnOpen, Span::from(33..34)),
+            (Token::Uint(8), Span::from(34..35)),
+            (Token::FnClose, Span::from(35..36)),
+            (Token::FnClose, Span::from(36..37)),
+            (Token::ListClose, Span::from(37..38)),
+            (Token::Semicolon, Span::from(38..39)),
+        ];
+        assert_eq!(output.output(), Some(&tokens));
+    }
 }
