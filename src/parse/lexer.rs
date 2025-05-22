@@ -35,7 +35,6 @@ pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>>>>, Vec<Le
 
 /// [lexer] creates a lexer which lexes an input string slice into a sequence
 /// of [`Token`]s.
-#[allow(dead_code)]
 fn lexer<'src>()
 -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<LexError<'src>>> {
     // Syntax
@@ -144,7 +143,6 @@ fn lexer<'src>()
 /* -------------------------------------------------------------------------- */
 
 /// `Token` enumerates the set of potential tokens recognized by the parser.
-#[allow(dead_code)]
 #[derive(Clone, Debug, Display, PartialEq)]
 pub enum Token<'src> {
     Invalid(&'src str),
@@ -154,7 +152,8 @@ pub enum Token<'src> {
     BlockOpen,
     Colon,
     Comma,
-    Dot,
+    #[allow(dead_code)]
+    Dot, // FIXME: Add support for dot notation.
     Equal,
     FnClose,
     FnOpen,

@@ -16,6 +16,8 @@ use super::Token;
 /// ParseError is a type alias for errors emitted during parsing.
 type ParseError<'src> = Rich<'src, Token<'src>, Span>;
 
+/// `parse` parses an input [`Token`] sequence into [`Expr`]s recognized by the
+/// compiler.
 pub fn parse<'src>(
     input: &'src Vec<Spanned<Token<'src>>>,
     size: usize,
@@ -31,6 +33,8 @@ pub fn parse<'src>(
 
 /* ------------------------------- Fn: parser ------------------------------- */
 
+/// [parser] creates a parser which parses an input [`Token`] slice into a
+/// sequence of [`Expr`]s.
 fn parser<'src, I>() -> impl Parser<'src, I, Vec<Spanned<Expr<'src>>>, extra::Err<ParseError<'src>>>
 where
     I: ValueInput<'src, Token = Token<'src>, Span = Span>,
@@ -323,7 +327,8 @@ where
 /*                                 Enum: Expr                                 */
 /* -------------------------------------------------------------------------- */
 
-#[allow(dead_code)]
+/// `Expr` enumerates the set of potential expressions recognized by the
+/// compiler.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr<'src> {
     Invalid(&'src [Token<'src>]),
@@ -358,7 +363,6 @@ impl<'src> Expr<'src> {
 
 /* ----------------------------- Struct: Message ---------------------------- */
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message<'src> {
     comment: Option<Vec<&'src str>>,
@@ -370,7 +374,6 @@ pub struct Message<'src> {
 
 /* ------------------------------ Struct: Enum ------------------------------ */
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Enum<'src> {
     comment: Option<Vec<&'src str>>,
@@ -380,7 +383,6 @@ pub struct Enum<'src> {
 
 /* ------------------------------ Struct: Field ----------------------------- */
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Field<'src> {
     comment: Option<Vec<&'src str>>,
@@ -392,7 +394,6 @@ pub struct Field<'src> {
 
 /* ----------------------------- Struct: Variant ---------------------------- */
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Variant<'src> {
     comment: Option<Vec<&'src str>>,
@@ -402,7 +403,6 @@ pub struct Variant<'src> {
 
 /* ---------------------------- Enum: VariantKind --------------------------- */
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum VariantKind<'src> {
     Field(Field<'src>),
@@ -411,7 +411,6 @@ pub enum VariantKind<'src> {
 
 /* ----------------------------- Enum: Encoding ----------------------------- */
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Encoding {
     // Sizing
@@ -421,15 +420,12 @@ pub enum Encoding {
 
     // Encodings
     Delta,
-    OmitZeroValue,
     Pad(usize),
-    QuatSmallestThree,
     ZigZag,
 }
 
 /* ------------------------------- Enum: Type ------------------------------- */
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 enum Type<'src> {
     Reference(&'src str),
