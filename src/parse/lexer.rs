@@ -24,8 +24,8 @@ pub type Spanned<T> = (T, Span);
 /* -------------------------------------------------------------------------- */
 
 /// `lex` lexes an input string into [`Token`]s recognized by the parser.
-pub fn lex<'src>(input: &'src str) -> Result<Vec<Spanned<Token<'src>>>, Vec<Rich<'src, char>>> {
-    lexer().parse(input).into_result()
+pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>>>>, Vec<Rich<'src, char>>) {
+    lexer().parse(input).into_output_errors()
 }
 
 /* -------------------------------- Fn: lexer ------------------------------- */
@@ -121,17 +121,19 @@ fn lexer<'src>()
         vec![]
     });
 
-    let idl = choice((
-        // NOTE: `string` and `comment` must be checked before `line_break` so
-        // that they may validate the full span of their potential input.
-        string, comment, line_break, control, keyword, uint, identifier,
-    ))
-    .padded_by(inline_whitespace())
-    .recover_with(skip_then_retry_until(any().ignored(), end()))
-    .repeated()
-    .collect();
+    let tokens = inline_whitespace()
+        .or_not()
+        .ignore_then(choice((
+            // NOTE: `string` and `comment` must be checked before `line_break` so
+            // that they may validate the full span of their potential input.
+            string, comment, line_break, control, keyword, uint, identifier,
+        )))
+        .then_ignore(inline_whitespace())
+        .recover_with(skip_then_retry_until(any().ignored(), end()))
+        .repeated()
+        .collect();
 
-    missing.or(idl)
+    missing.or(tokens)
 }
 
 /* -------------------------------------------------------------------------- */
