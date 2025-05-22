@@ -13,13 +13,13 @@ use super::Token;
 /*                                  Fn: Parse                                 */
 /* -------------------------------------------------------------------------- */
 
+/// ParseError is a type alias for errors emitted during parsing.
+type ParseError<'src> = Rich<'src, Token<'src>, Span>;
+
 pub fn parse<'src>(
     input: &'src Vec<Spanned<Token<'src>>>,
     size: usize,
-) -> (
-    Option<Vec<Spanned<Expr<'src>>>>,
-    Vec<Rich<'src, Token<'src>, Span>>,
-) {
+) -> (Option<Vec<Spanned<Expr<'src>>>>, Vec<ParseError<'src>>) {
     parser()
         .parse(
             input
@@ -31,8 +31,7 @@ pub fn parse<'src>(
 
 /* ------------------------------- Fn: parser ------------------------------- */
 
-fn parser<'src, I>()
--> impl Parser<'src, I, Vec<Spanned<Expr<'src>>>, extra::Err<Rich<'src, Token<'src>, Span>>>
+fn parser<'src, I>() -> impl Parser<'src, I, Vec<Spanned<Expr<'src>>>, extra::Err<ParseError<'src>>>
 where
     I: ValueInput<'src, Token = Token<'src>, Span = Span>,
 {
@@ -163,9 +162,9 @@ where
         .then_ignore(just(Token::Semicolon))
         .map(|((comment, index), name)| {
             Expr::Variant(Variant {
-                comment: comment,
-                index: index,
-                name: name,
+                comment,
+                index,
+                name,
             })
         })
         .labelled("variant")
@@ -195,11 +194,11 @@ where
         .then_ignore(just(Token::Semicolon))
         .map(|((((comment, index), typ), name), encoding)| {
             Expr::Field(Field {
-                comment: comment,
-                encoding: encoding,
-                index: index,
-                name: name,
-                typ: typ,
+                comment,
+                encoding,
+                index,
+                name,
+                typ,
             })
         })
         .labelled("field")
@@ -230,8 +229,8 @@ where
                 .delimited_by(just(Token::BlockOpen), just(Token::BlockClose)),
         )
         .map(|((comment, name), variants)| Enum {
-            comment: comment,
-            name: name,
+            comment,
+            name,
             variants: variants
                 .into_iter()
                 .filter_map(|expr| match expr {
@@ -285,13 +284,13 @@ where
                     }
                 }
 
-                return Message {
+                Message {
                     comment,
                     name,
                     fields,
                     enums,
                     messages,
-                };
+                }
             })
             .map(Expr::Message)
             .labelled("message")

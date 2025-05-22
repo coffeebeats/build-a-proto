@@ -50,7 +50,7 @@ pub struct Bindings {
 pub fn handle(args: Args) -> anyhow::Result<()> {
     let out_dir = parse_out_dir(args.out)?;
 
-    Ok(for path in args.files {
+    for path in args.files {
         println!(
             "Compiling {:?} into {:?} (binding={})",
             path,
@@ -111,7 +111,9 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
                     .print(sources([(path.to_owned(), contents.clone())]))
                     .unwrap()
             });
-    })
+    }
+
+    Ok(())
 }
 
 /* ---------------------------- Fn: parse_out_dir --------------------------- */

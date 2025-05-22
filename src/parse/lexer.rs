@@ -23,8 +23,11 @@ pub type Spanned<T> = (T, Span);
 /*                                   Fn: Lex                                  */
 /* -------------------------------------------------------------------------- */
 
+/// LexError is a type alias for errors emitted during lexing.
+type LexError<'src> = Rich<'src, char>;
+
 /// `lex` lexes an input string into [`Token`]s recognized by the parser.
-pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>>>>, Vec<Rich<'src, char>>) {
+pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>>>>, Vec<LexError<'src>>) {
     lexer().parse(input).into_output_errors()
 }
 
@@ -34,7 +37,7 @@ pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>>>>, Vec<Ri
 /// of [`Token`]s.
 #[allow(dead_code)]
 fn lexer<'src>()
--> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
+-> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<LexError<'src>>> {
     // Syntax
 
     let control = choice((
