@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 (2025-05-22)
+
+## What's Changed
+* feat: add `compile` command to the CLI by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/12
+* feat(parse): implement a lexer for tokenizing input by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/14
+* feat(parse): implement a parser with basic error reporting by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/15
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.1.2...v0.1.3
+
 ## 0.1.2 (2025-05-16)
 
 ## What's Changed
