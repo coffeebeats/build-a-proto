@@ -7,6 +7,7 @@
 
 [dependencies]
   anyhow      = "1.0.98"
+  ariadne     = {version = "0.5.1", features = ["auto-color"]}
   chumsky     = {version = "0.10.1", features = ["lexical-numbers"]}
   clap        = {version = "4.5.38", features = ["cargo", "derive"]}
   derive_more = {version = "2.0.1", features = ["display"]}

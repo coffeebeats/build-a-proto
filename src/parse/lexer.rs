@@ -20,82 +20,23 @@ pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
 
 /* -------------------------------------------------------------------------- */
-/*                                 Enum: Token                                */
-/* -------------------------------------------------------------------------- */
-
-/// `Token` enumerates the set of potential tokens recognized by the parser.
-#[allow(dead_code)]
-#[derive(Clone, Debug, Display, PartialEq)]
-pub enum Token<'src> {
-    Invalid(&'src str),
-
-    // Syntax
-    BlockClose,
-    BlockOpen,
-    Colon,
-    Comma,
-    Dot,
-    Equal,
-    FnClose,
-    FnOpen,
-    Keyword(Keyword),
-    ListClose,
-    ListOpen,
-    Semicolon,
-
-    // Whitespace
-    Newline,
-
-    // Input
-    Comment(&'src str),
-    Ident(&'src str),
-    String(&'src str),
-    Uint(usize),
-}
-
-/* ----------------------------- Impl: with_span ---------------------------- */
-
-impl<'src> Token<'src> {
-    /// `with_span`` is a convenience method for creating a [`Spanned`] item
-    /// from the provided [`chumsky::MapExtra`] details.
-    fn with_span<E>(self, info: &mut MapExtra<'src, '_, &'src str, E>) -> Spanned<Token<'src>>
-    where
-        E: ParserExtra<'src, &'src str>,
-    {
-        (self, info.span())
-    }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                Enum: Keyword                               */
-/* -------------------------------------------------------------------------- */
-
-/// Keyword enumerates the language's reserved keywords.
-#[derive(Clone, Debug, Display, PartialEq)]
-pub enum Keyword {
-    Encoding,
-    Enum,
-    Include,
-    Message,
-    Package,
-}
-
-/* -------------------------------------------------------------------------- */
 /*                                   Fn: Lex                                  */
 /* -------------------------------------------------------------------------- */
 
+/// LexError is a type alias for errors emitted during lexing.
+type LexError<'src> = Rich<'src, char>;
+
 /// `lex` lexes an input string into [`Token`]s recognized by the parser.
-pub fn lex<'src>(input: &'src str) -> Result<Vec<Spanned<Token<'src>>>, Vec<Rich<'src, char>>> {
-    lexer().parse(input).into_result()
+pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>>>>, Vec<LexError<'src>>) {
+    lexer().parse(input).into_output_errors()
 }
 
 /* -------------------------------- Fn: lexer ------------------------------- */
 
 /// [lexer] creates a lexer which lexes an input string slice into a sequence
 /// of [`Token`]s.
-#[allow(dead_code)]
 fn lexer<'src>()
--> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
+-> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<LexError<'src>>> {
     // Syntax
 
     let control = choice((
@@ -182,17 +123,78 @@ fn lexer<'src>()
         vec![]
     });
 
-    let idl = choice((
-        // NOTE: `string` and `comment` must be checked before `line_break` so
-        // that they may validate the full span of their potential input.
-        string, comment, line_break, control, keyword, uint, identifier,
-    ))
-    .padded_by(inline_whitespace())
-    .recover_with(skip_then_retry_until(any().ignored(), end()))
-    .repeated()
-    .collect();
+    let tokens = inline_whitespace()
+        .or_not()
+        .ignore_then(choice((
+            // NOTE: `string` and `comment` must be checked before `line_break` so
+            // that they may validate the full span of their potential input.
+            string, comment, line_break, control, keyword, uint, identifier,
+        )))
+        .then_ignore(inline_whitespace())
+        .recover_with(skip_then_retry_until(any().ignored(), end()))
+        .repeated()
+        .collect();
 
-    missing.or(idl)
+    missing.or(tokens)
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Enum: Token                                */
+/* -------------------------------------------------------------------------- */
+
+/// `Token` enumerates the set of potential tokens recognized by the parser.
+#[derive(Clone, Debug, Display, PartialEq)]
+pub enum Token<'src> {
+    Invalid(&'src str),
+
+    // Syntax
+    BlockClose,
+    BlockOpen,
+    Colon,
+    Comma,
+    #[allow(dead_code)]
+    Dot, // FIXME: Add support for dot notation.
+    Equal,
+    FnClose,
+    FnOpen,
+    Keyword(Keyword),
+    ListClose,
+    ListOpen,
+    Semicolon,
+
+    // Whitespace
+    Newline,
+
+    // Input
+    Comment(&'src str),
+    Ident(&'src str),
+    String(&'src str),
+    Uint(usize),
+}
+
+/* ----------------------------- Impl: with_span ---------------------------- */
+
+impl<'src> Token<'src> {
+    /// `with_span`` is a convenience method for creating a [`Spanned`] item
+    /// from the provided [`chumsky::MapExtra`] details.
+    fn with_span<E>(self, info: &mut MapExtra<'src, '_, &'src str, E>) -> Spanned<Token<'src>>
+    where
+        E: ParserExtra<'src, &'src str>,
+    {
+        (self, info.span())
+    }
+}
+
+/* ------------------------------ Enum: Keyword ----------------------------- */
+
+/// Keyword enumerates the language's reserved keywords.
+#[derive(Clone, Debug, Display, PartialEq)]
+pub enum Keyword {
+    Encoding,
+    Enum,
+    Include,
+    Message,
+    Package,
 }
 
 /* -------------------------------------------------------------------------- */
