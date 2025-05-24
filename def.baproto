@@ -1,0 +1,9 @@
+package "def";
+
+include "abc.baproto";
+
+message Def {
+    // COMMENT
+
+    u8 sequence_id;
+}

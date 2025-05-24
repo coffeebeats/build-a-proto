@@ -12,7 +12,7 @@
           "kind": "bin"
         }
       },
-      "args": [],
+      "args": ["compile", "--cpp", "abc.baproto", "def.baproto"],
       "cwd": "${workspaceFolder}",
       "env": {
         "BAPROTO_HOME": "${workspaceFolder}/.baproto"

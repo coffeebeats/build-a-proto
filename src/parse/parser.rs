@@ -4,6 +4,8 @@ use chumsky::input::MapExtra;
 use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 
+use crate::core::Encoding;
+
 use super::Keyword;
 use super::Span;
 use super::Spanned;
@@ -14,7 +16,7 @@ use super::Token;
 /* -------------------------------------------------------------------------- */
 
 /// ParseError is a type alias for errors emitted during parsing.
-type ParseError<'src> = Rich<'src, Token<'src>, Span>;
+pub type ParseError<'src> = Rich<'src, Token<'src>, Span>;
 
 /// `parse` parses an input [`Token`] sequence into [`Expr`]s recognized by the
 /// compiler.
@@ -22,6 +24,10 @@ pub fn parse<'src>(
     input: &'src Vec<Spanned<Token<'src>>>,
     size: usize,
 ) -> (Option<Vec<Spanned<Expr<'src>>>>, Vec<ParseError<'src>>) {
+    for token in input {
+        println!("{:?}", token);
+    }
+
     parser()
         .parse(
             input
@@ -87,7 +93,10 @@ where
 
     // Types
 
-    let reference = ident.map(Type::Reference);
+    let reference = ident
+        // .separated_by(just(Token::Dot))
+        // .collect::<Vec<_>>()
+        .map(Type::Reference);
 
     let scalar = select! {
         Token::Ident("bit") => Type::Bit,
@@ -220,18 +229,16 @@ where
             .repeated(),
         )
         .then(
-            just(Token::Newline)
-                .repeated()
-                .ignore_then(choice((
-                    field.clone(),
-                    variant.clone(),
-                    line_comment.clone(),
-                )))
-                .then_ignore(just(Token::Newline).repeated())
+            choice((field.clone(), variant.clone(), line_comment.clone()))
                 .repeated()
                 .collect::<Vec<Expr<'src>>>()
+                .delimited_by(
+                    just(Token::Newline).repeated(),
+                    just(Token::Newline).repeated(),
+                )
                 .delimited_by(just(Token::BlockOpen), just(Token::BlockClose)),
         )
+        .then_ignore(just(Token::Newline).or_not())
         .map(|((comment, name), variants)| Enum {
             comment,
             name,
@@ -260,19 +267,16 @@ where
                 .repeated(),
             )
             .then(
-                just(Token::Newline)
-                    .repeated()
-                    .ignore_then(choice((
-                        msg,
-                        enumeration.clone(),
-                        field,
-                        line_comment.clone(),
-                    )))
-                    .then_ignore(just(Token::Newline).repeated())
+                choice((msg, enumeration.clone(), field, line_comment.clone()))
                     .repeated()
                     .collect::<Vec<Expr<'src>>>()
+                    .delimited_by(
+                        just(Token::Newline).repeated(),
+                        just(Token::Newline).repeated(),
+                    )
                     .delimited_by(just(Token::BlockOpen), just(Token::BlockClose)),
             )
+            .then_ignore(just(Token::Newline).or_not())
             .map(|((comment, name), exprs)| {
                 let mut enums = vec![];
                 let mut fields = vec![];
@@ -365,40 +369,40 @@ impl<'src> Expr<'src> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message<'src> {
-    comment: Option<Vec<&'src str>>,
-    enums: Vec<Enum<'src>>,
-    fields: Vec<Field<'src>>,
-    messages: Vec<Message<'src>>,
-    name: &'src str,
+    pub comment: Option<Vec<&'src str>>,
+    pub enums: Vec<Enum<'src>>,
+    pub fields: Vec<Field<'src>>,
+    pub messages: Vec<Message<'src>>,
+    pub name: &'src str,
 }
 
 /* ------------------------------ Struct: Enum ------------------------------ */
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Enum<'src> {
-    comment: Option<Vec<&'src str>>,
-    name: &'src str,
-    variants: Vec<VariantKind<'src>>,
+    pub comment: Option<Vec<&'src str>>,
+    pub name: &'src str,
+    pub variants: Vec<VariantKind<'src>>,
 }
 
 /* ------------------------------ Struct: Field ----------------------------- */
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Field<'src> {
-    comment: Option<Vec<&'src str>>,
-    encoding: Option<Vec<Encoding>>,
-    index: Option<usize>,
-    name: &'src str,
-    typ: Type<'src>,
+    pub comment: Option<Vec<&'src str>>,
+    pub encoding: Option<Vec<Encoding>>,
+    pub index: Option<usize>,
+    pub name: &'src str,
+    pub typ: Type<'src>,
 }
 
 /* ----------------------------- Struct: Variant ---------------------------- */
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Variant<'src> {
-    comment: Option<Vec<&'src str>>,
-    index: Option<usize>,
-    name: &'src str,
+    pub comment: Option<Vec<&'src str>>,
+    pub index: Option<usize>,
+    pub name: &'src str,
 }
 
 /* ---------------------------- Enum: VariantKind --------------------------- */
@@ -409,25 +413,10 @@ pub enum VariantKind<'src> {
     Variant(Variant<'src>),
 }
 
-/* ----------------------------- Enum: Encoding ----------------------------- */
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Encoding {
-    // Sizing
-    Bits(usize),
-    BitsVariable(usize),
-    FixedPoint(usize, usize),
-
-    // Encodings
-    Delta,
-    Pad(usize),
-    ZigZag,
-}
-
 /* ------------------------------- Enum: Type ------------------------------- */
 
 #[derive(Clone, Debug, PartialEq)]
-enum Type<'src> {
+pub enum Type<'src> {
     Reference(&'src str),
 
     // Scalars
@@ -511,6 +500,45 @@ mod tests {
             (Expr::Include("../a/b/c.ext"), Span::from(6..9)),
             (Expr::Include("d.ext"), Span::from(9..12)),
         ];
+        assert_eq!(output.output(), Some(&exprs));
+    }
+
+    #[test]
+    fn test_line_comment_in_message_returns_correct_expr_list() {
+        // Given: An input list of tokens.
+        let input = vec![
+            Token::Keyword(Keyword::Message),
+            Token::Ident("Message"),
+            Token::BlockOpen,
+            Token::Newline,
+            Token::Comment("comment"),
+            Token::Newline,
+            Token::Newline,
+            Token::Ident("u8"),
+            Token::Ident("sequence_id"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::BlockClose,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has no errors.
+        println!("{:?}", output.errors().collect::<Vec<_>>());
+        assert!(!output.has_errors());
+
+        // Then: The output expression list matches expectations.
+        let exprs = vec![(
+            Expr::Message(Message {
+                comment: None,
+                enums: vec![],
+                fields: vec![Field {}],
+                messages: (),
+                name: (),
+            }),
+            Span::from(0..12),
+        )];
         assert_eq!(output.output(), Some(&exprs));
     }
 }
