@@ -1,4 +1,5 @@
 mod cmd;
+mod core;
 mod parse;
 
 use anyhow::Result;
