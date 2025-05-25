@@ -183,12 +183,10 @@ fn parse_include_path<'a>(
     span: Span,
 ) -> Result<PathBuf, ParseError<'a>> {
     match PathBuf::from_str(dep_path) {
-        Err(err) => {
-            Err(Rich::custom(
-                span,
-                format!("{}: invalid include path: {}", err, dep_path),
-            ))
-        }
+        Err(err) => Err(Rich::custom(
+            span,
+            format!("{}: invalid include path: {}", err, dep_path),
+        )),
         Ok(mut p) => {
             debug_assert!(p.to_str().is_some());
 
