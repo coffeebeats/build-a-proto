@@ -45,7 +45,7 @@ impl<'a> From<crate::parse::Variant<'a>> for Variant {
             .comment(
                 value
                     .comment
-                    .unwrap_or(vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .map(str::to_owned)
                     .collect(),
