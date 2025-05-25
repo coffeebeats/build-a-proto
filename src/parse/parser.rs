@@ -1,20 +1,31 @@
 use chumsky::Parser;
 use chumsky::extra::ParserExtra;
+use chumsky::input::Emitter;
 use chumsky::input::MapExtra;
 use chumsky::input::ValueInput;
 use chumsky::prelude::*;
+use std::collections::HashSet;
 
+use crate::core::Encoding;
+
+use super::Enum;
+use super::Expr;
+use super::Field;
 use super::Keyword;
+use super::Message;
 use super::Span;
 use super::Spanned;
 use super::Token;
+use super::Type;
+use super::Variant;
+use super::VariantKind;
 
 /* -------------------------------------------------------------------------- */
 /*                                  Fn: Parse                                 */
 /* -------------------------------------------------------------------------- */
 
 /// ParseError is a type alias for errors emitted during parsing.
-type ParseError<'src> = Rich<'src, Token<'src>, Span>;
+pub type ParseError<'src> = Rich<'src, Token<'src>, Span>;
 
 /// `parse` parses an input [`Token`] sequence into [`Expr`]s recognized by the
 /// compiler.
@@ -67,12 +78,12 @@ where
         .ignore_then(comment)
         .then_ignore(just(Token::Newline))
         .map(Expr::Comment)
-        .labelled("comment");
+        .labelled("inline comment");
 
     let line_comment = comment
         .then_ignore(just(Token::Newline))
         .map(Expr::Comment)
-        .labelled("comment");
+        .labelled("line comment");
     let doc_comment = comment
         .map(|c| vec![c])
         .foldl(
@@ -220,29 +231,34 @@ where
             .repeated(),
         )
         .then(
-            just(Token::Newline)
-                .repeated()
-                .ignore_then(choice((
-                    field.clone(),
-                    variant.clone(),
-                    line_comment.clone(),
-                )))
-                .then_ignore(just(Token::Newline).repeated())
+            choice((field.clone(), variant.clone(), line_comment.clone()))
+                .delimited_by(
+                    just(Token::Newline).repeated(),
+                    just(Token::Newline).repeated(),
+                )
+                .boxed()
                 .repeated()
                 .collect::<Vec<Expr<'src>>>()
                 .delimited_by(just(Token::BlockOpen), just(Token::BlockClose)),
         )
-        .map(|((comment, name), variants)| Enum {
-            comment,
-            name,
-            variants: variants
-                .into_iter()
-                .filter_map(|expr| match expr {
-                    Expr::Field(f) => Some(VariantKind::Field(f)),
-                    Expr::Variant(v) => Some(VariantKind::Variant(v)),
-                    _ => None,
-                })
-                .collect(),
+        .then_ignore(just(Token::Newline).or_not())
+        .validate(|((comment, name), mut exprs), info, mut emitter| {
+            // TODO: Replace these with context-sensitive field parsing.
+            check_field_names(&mut exprs, info, &mut emitter);
+            set_field_indices(&mut exprs, info, &mut emitter);
+
+            Enum {
+                comment,
+                name,
+                variants: exprs
+                    .into_iter()
+                    .filter_map(|expr| match expr {
+                        Expr::Field(f) => Some(VariantKind::Field(f)),
+                        Expr::Variant(v) => Some(VariantKind::Variant(v)),
+                        _ => None,
+                    })
+                    .collect(),
+            }
         })
         .map(Expr::Enum)
         .labelled("enum")
@@ -260,23 +276,25 @@ where
                 .repeated(),
             )
             .then(
-                just(Token::Newline)
-                    .repeated()
-                    .ignore_then(choice((
-                        msg,
-                        enumeration.clone(),
-                        field,
-                        line_comment.clone(),
-                    )))
-                    .then_ignore(just(Token::Newline).repeated())
+                choice((msg, enumeration.clone(), field, line_comment.clone()))
+                    .delimited_by(
+                        just(Token::Newline).repeated(),
+                        just(Token::Newline).repeated(),
+                    )
+                    .boxed()
                     .repeated()
                     .collect::<Vec<Expr<'src>>>()
                     .delimited_by(just(Token::BlockOpen), just(Token::BlockClose)),
             )
-            .map(|((comment, name), exprs)| {
+            .then_ignore(just(Token::Newline).or_not())
+            .validate(|((comment, name), mut exprs), info, mut emitter| {
                 let mut enums = vec![];
                 let mut fields = vec![];
                 let mut messages = vec![];
+
+                // TODO: Replace these with context-sensitive field parsing.
+                check_field_names(&mut exprs, info, &mut emitter);
+                set_field_indices(&mut exprs, info, &mut emitter);
 
                 for expr in exprs {
                     match expr {
@@ -323,132 +341,103 @@ where
     missing.or(ast)
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                 Enum: Expr                                 */
-/* -------------------------------------------------------------------------- */
+/* -------------------------- Fn: check_field_names ------------------------- */
 
-/// `Expr` enumerates the set of potential expressions recognized by the
-/// compiler.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Expr<'src> {
-    Invalid(&'src [Token<'src>]),
+fn check_field_names<'src, I, Ex>(
+    fields: &mut Vec<Expr<'src>>,
+    info: &mut MapExtra<'src, '_, I, Ex>,
+    emitter: &mut Emitter<Rich<'src, Token<'src>, Span>>,
+) where
+    I: ValueInput<'src, Token = Token<'src>, Span = Span>,
+    Ex: ParserExtra<'src, I>,
+{
+    let mut seen = HashSet::<&'src str>::with_capacity(fields.len());
 
-    // Metadata
-    Comment(&'src str),
-    Include(&'src str),
-    Package(&'src str),
+    for expr in fields.iter_mut() {
+        let target: &'src str;
 
-    // Properties
-    Field(Field<'src>),
-    Variant(Variant<'src>),
+        match expr {
+            Expr::Field(f) => target = f.name,
+            Expr::Variant(v) => target = v.name,
+            _ => continue,
+        }
 
-    // Definitions
-    Message(Message<'src>),
-    Enum(Enum<'src>),
-}
+        if seen.contains(target) {
+            emitter.emit(Rich::custom(
+                info.span(),
+                format!("Duplicate field name: {}", target),
+            ));
 
-/* ----------------------------- Impl: with_span ---------------------------- */
+            continue;
+        }
 
-impl<'src> Expr<'src> {
-    /// `with_span`` is a convenience method for creating a [`Spanned`] item
-    /// from the provided [`chumsky::MapExtra`] details.
-    fn with_span<I, E>(self, info: &mut MapExtra<'src, '_, I, E>) -> Spanned<Expr<'src>>
-    where
-        I: ValueInput<'src, Token = Token<'src>, Span = Span>,
-        E: ParserExtra<'src, I>,
-    {
-        (self, info.span())
+        seen.insert(target);
     }
 }
 
-/* ----------------------------- Struct: Message ---------------------------- */
+/* -------------------------- Fn: set_field_indices ------------------------- */
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Message<'src> {
-    comment: Option<Vec<&'src str>>,
-    enums: Vec<Enum<'src>>,
-    fields: Vec<Field<'src>>,
-    messages: Vec<Message<'src>>,
-    name: &'src str,
-}
+fn set_field_indices<'src, I, Ex>(
+    fields: &mut Vec<Expr<'src>>,
+    info: &mut MapExtra<'src, '_, I, Ex>,
+    emitter: &mut Emitter<Rich<'src, Token<'src>, Span>>,
+) where
+    I: ValueInput<'src, Token = Token<'src>, Span = Span>,
+    Ex: ParserExtra<'src, I>,
+{
+    let mut indices: Vec<Option<()>> = fields
+        .iter()
+        .filter_map(|expr| match expr {
+            Expr::Field(_) => Some(None),
+            Expr::Variant(_) => Some(None),
+            _ => None,
+        })
+        .collect();
 
-/* ------------------------------ Struct: Enum ------------------------------ */
+    for expr in fields.iter_mut() {
+        let target: &mut Option<usize>;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Enum<'src> {
-    comment: Option<Vec<&'src str>>,
-    name: &'src str,
-    variants: Vec<VariantKind<'src>>,
-}
+        match expr {
+            Expr::Field(f) => target = &mut f.index,
+            Expr::Variant(v) => target = &mut v.index,
+            _ => continue,
+        }
 
-/* ------------------------------ Struct: Field ----------------------------- */
+        match target {
+            Some(index) => {
+                let value = *index;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Field<'src> {
-    comment: Option<Vec<&'src str>>,
-    encoding: Option<Vec<Encoding>>,
-    index: Option<usize>,
-    name: &'src str,
-    typ: Type<'src>,
-}
+                if value >= indices.len() {
+                    emitter.emit(Rich::custom(
+                        info.span(),
+                        format!("Field index out of range: {}", value),
+                    ));
 
-/* ----------------------------- Struct: Variant ---------------------------- */
+                    return;
+                }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Variant<'src> {
-    comment: Option<Vec<&'src str>>,
-    index: Option<usize>,
-    name: &'src str,
-}
+                if let Some(_) = indices.get(value).unwrap() {
+                    emitter.emit(Rich::custom(
+                        info.span(),
+                        format!("Found duplicate field index: {}", value),
+                    ));
 
-/* ---------------------------- Enum: VariantKind --------------------------- */
+                    return;
+                }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum VariantKind<'src> {
-    Field(Field<'src>),
-    Variant(Variant<'src>),
-}
+                indices[value] = Some(());
+            }
+            None => {
+                let next_index = indices.iter().position(Option::is_none);
+                debug_assert!(next_index.is_some());
 
-/* ----------------------------- Enum: Encoding ----------------------------- */
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Encoding {
-    // Sizing
-    Bits(usize),
-    BitsVariable(usize),
-    FixedPoint(usize, usize),
-
-    // Encodings
-    Delta,
-    Pad(usize),
-    ZigZag,
-}
-
-/* ------------------------------- Enum: Type ------------------------------- */
-
-#[derive(Clone, Debug, PartialEq)]
-enum Type<'src> {
-    Reference(&'src str),
-
-    // Scalars
-    Bit,
-    Bool,
-    Byte,
-    Float32,
-    Float64,
-    SignedInt16,
-    SignedInt32,
-    SignedInt64,
-    SignedInt8,
-    String,
-    UnsignedInt16,
-    UnsignedInt32,
-    UnsignedInt64,
-    UnsignedInt8,
-
-    // Containers
-    Array(Box<Type<'src>>, Option<usize>),
-    Map(Box<Type<'src>>, Box<Type<'src>>),
+                if let Some(value) = next_index {
+                    let _ = target.insert(value);
+                    indices[value] = Some(());
+                }
+            }
+        }
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -457,6 +446,9 @@ enum Type<'src> {
 
 #[cfg(test)]
 mod tests {
+    use crate::parse::FieldBuilder;
+    use crate::parse::MessageBuilder;
+
     use super::*;
 
     #[test]
@@ -502,7 +494,6 @@ mod tests {
         let output = parser().parse(input.as_slice());
 
         // Then: The input has no errors.
-        println!("{:?}", output.errors().collect::<Vec<_>>());
         assert!(!output.has_errors());
 
         // Then: The output expression list matches expectations.
@@ -511,6 +502,50 @@ mod tests {
             (Expr::Include("../a/b/c.ext"), Span::from(6..9)),
             (Expr::Include("d.ext"), Span::from(9..12)),
         ];
+        assert_eq!(output.output(), Some(&exprs));
+    }
+
+    #[test]
+    fn test_line_comment_in_message_returns_correct_expr_list() {
+        // Given: An input list of tokens.
+        let input = vec![
+            Token::Keyword(Keyword::Message),
+            Token::Ident("Message"),
+            Token::BlockOpen,
+            Token::Newline,
+            Token::Comment("comment"),
+            Token::Newline,
+            Token::Newline,
+            Token::Ident("u8"),
+            Token::Ident("sequence_id"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::BlockClose,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has no errors.
+        assert!(!output.has_errors());
+
+        // Then: The output expression list matches expectations.
+        let exprs = vec![(
+            MessageBuilder::default()
+                .name("Message")
+                .fields(vec![
+                    FieldBuilder::default()
+                        .name("sequence_id")
+                        .typ(Type::UnsignedInt8)
+                        .index(0)
+                        .build()
+                        .unwrap(),
+                ])
+                .build()
+                .unwrap()
+                .into(),
+            Span::from(0..12),
+        )];
         assert_eq!(output.output(), Some(&exprs));
     }
 }
