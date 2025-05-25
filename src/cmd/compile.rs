@@ -91,7 +91,7 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
 
     compile(&mut reg).map_err(|e| anyhow!(e))?;
 
-    println!("");
+    println!();
 
     for (d, m) in reg.iter_modules() {
         println!("{}: {}", d, m);
