@@ -64,7 +64,7 @@ impl Registry {
     }
 
     pub fn remove(&mut self, descriptor: &Descriptor) -> Option<Kind> {
-        self.0.remove(&descriptor)
+        self.0.remove(descriptor)
     }
 }
 
@@ -114,7 +114,7 @@ pub struct Descriptor {
 
 impl From<&Descriptor> for String {
     fn from(value: &Descriptor) -> Self {
-        let name = value.name.as_ref().map(|s| s.as_str()).unwrap_or("");
+        let name = value.name.as_deref().unwrap_or("");
         let pkg = value.package.join(".");
         let path = if !value.path.is_empty() {
             value.path.join(".")

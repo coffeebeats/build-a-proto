@@ -51,7 +51,7 @@ impl<'a> From<crate::parse::Field<'a>> for Field {
             .comment(
                 value
                     .comment
-                    .unwrap_or(vec![])
+                    .unwrap_or_default()
                     .into_iter()
                     .map(str::to_owned)
                     .collect(),

@@ -1,12 +1,15 @@
+mod expr;
 mod lexer;
 mod parser;
 
+/* -------------------------------- Mod: Expr ------------------------------- */
+
+pub use expr::*;
+
 /* ------------------------------- Mod: Lexer ------------------------------- */
 
-#[allow(unused_imports)]
 pub use lexer::*;
 
 /* ------------------------------- Mod: Parser ------------------------------ */
 
-#[allow(unused_imports)]
 pub use parser::*;

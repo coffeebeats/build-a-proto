@@ -36,7 +36,7 @@ impl<'a> From<&crate::parse::Type<'a>> for Type {
             crate::parse::Type::UnsignedInt64 => Type::Scalar(Scalar::UnsignedInt64),
             crate::parse::Type::UnsignedInt8 => Type::Scalar(Scalar::UnsignedInt8),
             crate::parse::Type::Array(typ, size) => {
-                Type::Array(Box::new(Type::from(typ.as_ref())), size.clone())
+                Type::Array(Box::new(Type::from(typ.as_ref())), *size)
             }
             crate::parse::Type::Map(k, v) => Type::Map(
                 Box::new(Type::from(k.as_ref())),

@@ -24,7 +24,7 @@ pub type Spanned<T> = (T, Span);
 /* -------------------------------------------------------------------------- */
 
 /// LexError is a type alias for errors emitted during lexing.
-type LexError<'src> = Rich<'src, char>;
+pub type LexError<'src> = Rich<'src, char>;
 
 /// `lex` lexes an input string into [`Token`]s recognized by the parser.
 pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>>>>, Vec<LexError<'src>>) {
@@ -116,7 +116,12 @@ fn lexer<'src>()
             .map_with(Token::with_span),
     );
 
-    let identifier = ident().map(Token::Ident).map_with(Token::with_span);
+    let identifier = ident()
+        .separated_by(just('.'))
+        .at_least(1)
+        .to_slice()
+        .map(Token::Ident)
+        .map_with(Token::with_span);
 
     let missing = empty().then(end()).validate(|_, info, emitter| {
         emitter.emit(Rich::custom(info.span(), "missing input"));
@@ -152,8 +157,6 @@ pub enum Token<'src> {
     BlockOpen,
     Colon,
     Comma,
-    #[allow(dead_code)]
-    Dot, // FIXME: Add support for dot notation.
     Equal,
     FnClose,
     FnOpen,
