@@ -116,7 +116,6 @@ fn lexer<'src>()
             .map_with(Token::with_span),
     );
 
-    // let dot = just('.').map(|_| Token::Dot).map_with(Token::with_span);
     let identifier = ident()
         .separated_by(just('.'))
         .at_least(1)
