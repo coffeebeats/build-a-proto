@@ -242,10 +242,10 @@ where
                 .delimited_by(just(Token::BlockOpen), just(Token::BlockClose)),
         )
         .then_ignore(just(Token::Newline).or_not())
-        .validate(|((comment, name), mut exprs), info, mut emitter| {
+        .validate(|((comment, name), mut exprs), info, emitter| {
             // TODO: Replace these with context-sensitive field parsing.
-            check_field_names(&mut exprs, info, &mut emitter);
-            set_field_indices(&mut exprs, info, &mut emitter);
+            check_field_names(&mut exprs, info, emitter);
+            set_field_indices(&mut exprs, info, emitter);
 
             Enum {
                 comment,
@@ -287,14 +287,14 @@ where
                     .delimited_by(just(Token::BlockOpen), just(Token::BlockClose)),
             )
             .then_ignore(just(Token::Newline).or_not())
-            .validate(|((comment, name), mut exprs), info, mut emitter| {
+            .validate(|((comment, name), mut exprs), info, emitter| {
                 let mut enums = vec![];
                 let mut fields = vec![];
                 let mut messages = vec![];
 
                 // TODO: Replace these with context-sensitive field parsing.
-                check_field_names(&mut exprs, info, &mut emitter);
-                set_field_indices(&mut exprs, info, &mut emitter);
+                check_field_names(&mut exprs, info, emitter);
+                set_field_indices(&mut exprs, info, emitter);
 
                 for expr in exprs {
                     match expr {
@@ -354,13 +354,11 @@ fn check_field_names<'src, I, Ex>(
     let mut seen = HashSet::<&'src str>::with_capacity(fields.len());
 
     for expr in fields.iter_mut() {
-        let target: &'src str;
-
-        match expr {
-            Expr::Field(f) => target = f.name,
-            Expr::Variant(v) => target = v.name,
+        let target: &'src str = match expr {
+            Expr::Field(f) => f.name,
+            Expr::Variant(v) => v.name,
             _ => continue,
-        }
+        };
 
         if seen.contains(target) {
             emitter.emit(Rich::custom(
@@ -395,13 +393,11 @@ fn set_field_indices<'src, I, Ex>(
         .collect();
 
     for expr in fields.iter_mut() {
-        let target: &mut Option<usize>;
-
-        match expr {
-            Expr::Field(f) => target = &mut f.index,
-            Expr::Variant(v) => target = &mut v.index,
+        let target: &mut Option<usize> = match expr {
+            Expr::Field(f) => &mut f.index,
+            Expr::Variant(v) => &mut v.index,
             _ => continue,
-        }
+        };
 
         match target {
             Some(index) => {
@@ -416,7 +412,7 @@ fn set_field_indices<'src, I, Ex>(
                     return;
                 }
 
-                if let Some(_) = indices.get(value).unwrap() {
+                if indices.get(value).unwrap().is_some() {
                     emitter.emit(Rich::custom(
                         info.span(),
                         format!("Found duplicate field index: {}", value),
