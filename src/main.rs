@@ -1,7 +1,6 @@
 mod cmd;
 mod compile;
 mod core;
-mod generate;
 mod parse;
 
 use anyhow::Result;
