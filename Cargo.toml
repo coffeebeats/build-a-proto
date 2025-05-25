@@ -12,6 +12,7 @@
   clap           = {version = "4.5.38", features = ["cargo", "derive"]}
   derive_builder = "0.20.2"
   derive_more    = {version = "2.0.1", features = ["display"]}
+  thiserror      = "2.0.12"
 
 [dev-dependencies]
   rstest = {version = "0.25.0", default-features = false}
