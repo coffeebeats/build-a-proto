@@ -1,4 +1,5 @@
 mod cmd;
+mod compile;
 mod core;
 mod parse;
 

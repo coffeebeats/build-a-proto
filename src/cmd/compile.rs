@@ -7,6 +7,11 @@ use ariadne::sources;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::compile::compile;
+use crate::compile::prepare;
+use crate::core::Registry;
+use crate::parse::LexError;
+use crate::parse::ParseError;
 use crate::parse::lex;
 use crate::parse::parse;
 
@@ -50,6 +55,8 @@ pub struct Bindings {
 pub fn handle(args: Args) -> anyhow::Result<()> {
     let out_dir = parse_out_dir(args.out)?;
 
+    let mut reg = Registry::default();
+
     for path in args.files {
         println!(
             "Compiling {:?} into {:?} (binding={})",
@@ -60,60 +67,79 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
 
         let contents = std::fs::read_to_string(&path).map_err(|e| anyhow!(e))?;
 
-        let path = path
-            .canonicalize()
-            .map_err(|e| anyhow!(e))?
-            .to_owned()
-            .into_os_string()
-            .into_string()
-            .map_err(|s| anyhow!("couldn't convert path to string: {:?}", s))?;
-
-        let mut parse_errs = vec![];
+        let path = path.canonicalize().map_err(|e| anyhow!(e))?;
 
         let (tokens, lex_errs) = lex(&contents);
+        let mut parse_errs = vec![];
 
         if let Some(tokens) = tokens.as_ref() {
             let (exprs, errs) = parse(tokens, contents.len());
             parse_errs = errs;
 
-            if let Some(exprs) = exprs.as_ref() {
-                for expr in exprs {
-                    println!("\n{:?}", expr);
+            if let Some(exprs) = exprs {
+                if let Err(err) = prepare(&path, &mut reg, exprs) {
+                    parse_errs.push(err);
                 }
             }
         }
 
-        println!("\n");
+        if !lex_errs.is_empty() || !parse_errs.is_empty() {
+            report_errors(path.to_str().unwrap(), &contents, lex_errs, parse_errs);
+            return Err(anyhow!("Failed to parse file: {:?}", path));
+        }
+    }
 
-        lex_errs
-            .into_iter()
-            .map(|e| e.map_token(|c| c.to_string()))
-            .chain(
-                parse_errs
-                    .into_iter()
-                    .map(|e| e.map_token(|t| t.to_string())),
-            )
-            .for_each(|e| {
-                Report::build(ReportKind::Error, (path.to_owned(), e.span().into_range()))
-                    .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-                    .with_message(e.to_string())
-                    .with_label(
-                        Label::new((path.to_owned(), e.span().into_range()))
-                            .with_message(e.reason().to_string())
-                            .with_color(Color::Red),
-                    )
-                    .with_labels(e.contexts().map(|(label, span)| {
-                        Label::new((path.to_owned(), span.into_range()))
-                            .with_message(format!("while parsing this {}", label))
-                            .with_color(Color::Yellow)
-                    }))
-                    .finish()
-                    .print(sources([(path.to_owned(), contents.clone())]))
-                    .unwrap()
-            });
+    compile(&mut reg).map_err(|e| anyhow!(e))?;
+
+    println!();
+
+    for (d, m) in reg.iter_modules() {
+        println!("{}: {}", d, m);
+    }
+
+    for (d, e) in reg.iter_enums() {
+        println!("{}: {}", d, e);
+    }
+
+    for (d, m) in reg.iter_messages() {
+        println!("{}: {}", d, m);
     }
 
     Ok(())
+}
+
+fn report_errors<'a>(
+    path: &str,
+    contents: &str,
+    lex_errs: Vec<LexError<'a>>,
+    parse_errs: Vec<ParseError<'a>>,
+) {
+    lex_errs
+        .into_iter()
+        .map(|e| e.map_token(|c| c.to_string()))
+        .chain(
+            parse_errs
+                .into_iter()
+                .map(|e| e.map_token(|t| t.to_string())),
+        )
+        .for_each(|e| {
+            Report::build(ReportKind::Error, (path.to_owned(), e.span().into_range()))
+                .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+                .with_message(e.to_string())
+                .with_label(
+                    Label::new((path.to_owned(), e.span().into_range()))
+                        .with_message(e.reason().to_string())
+                        .with_color(Color::Red),
+                )
+                .with_labels(e.contexts().map(|(label, span)| {
+                    Label::new((path.to_owned(), span.into_range()))
+                        .with_message(format!("while parsing this {:?}", label))
+                        .with_color(Color::Yellow)
+                }))
+                .finish()
+                .print(sources([(path.to_owned(), contents.to_owned())]))
+                .unwrap()
+        });
 }
 
 /* ---------------------------- Fn: parse_out_dir --------------------------- */
