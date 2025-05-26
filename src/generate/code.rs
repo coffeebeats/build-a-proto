@@ -50,7 +50,6 @@ impl CodeWriter {
     pub fn comment<W: Writer>(&mut self, writer: &mut W, input: &str) -> anyhow::Result<()> {
         writer.write(&format!("{} {}", self.comment_token, input))?;
         self.newline(writer)?;
-        // writer.write(&self.indent_token.repeat(self.indented))?;
 
         Ok(())
     }
