@@ -69,7 +69,7 @@ Invoke-WebRequest `
 `baproto` is a Rust project and can be installed using `cargo build`. This option is not recommended as it requires having the Rust toolchain installed, it's slower than downloading a prebuilt binary, and there may be instability due to using a different version of Rust than it was developed with.
 
 ```sh
-cargo install --git github.com/coffeebeats/build-a-proto/cmd/baproto --tag v0.1.2 # x-release-please-version
+cargo install --git github.com/coffeebeats/build-a-proto/cmd/baproto --tag v0.1.3 # x-release-please-version
 ```
 
 Once `baproto` is installed a few things need to be configured. Follow the instructions below based on your operating system.
