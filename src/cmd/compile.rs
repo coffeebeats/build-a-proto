@@ -4,12 +4,17 @@ use ariadne::Label;
 use ariadne::Report;
 use ariadne::ReportKind;
 use ariadne::sources;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 
 use crate::compile::compile;
 use crate::compile::prepare;
 use crate::core::Registry;
+use crate::generate;
+use crate::generate::FileWriter;
+use crate::generate::generate;
 use crate::parse::LexError;
 use crate::parse::ParseError;
 use crate::parse::lex;
@@ -57,7 +62,20 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
 
     let mut reg = Registry::default();
 
-    for path in args.files {
+    let mut seen = HashSet::<PathBuf>::with_capacity(args.files.len());
+    let mut files = VecDeque::<PathBuf>::from(args.files);
+
+    while !files.is_empty() {
+        let path = files
+            .pop_front()
+            .unwrap()
+            .canonicalize()
+            .map_err(|e| anyhow!(e))?;
+
+        if seen.contains(&path) {
+            continue;
+        }
+
         println!(
             "Compiling {:?} into {:?} (binding={})",
             path,
@@ -66,8 +84,6 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
         );
 
         let contents = std::fs::read_to_string(&path).map_err(|e| anyhow!(e))?;
-
-        let path = path.canonicalize().map_err(|e| anyhow!(e))?;
 
         let (tokens, lex_errs) = lex(&contents);
         let mut parse_errs = vec![];
@@ -87,22 +103,28 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             report_errors(path.to_str().unwrap(), &contents, lex_errs, parse_errs);
             return Err(anyhow!("Failed to parse file: {:?}", path));
         }
+
+        // HACK: Use first-pass module declaration to add imported
+        // modules to the queue of files to process. Note that all
+        // imports will be inserted because this design does not
+        // distinguish the dependencies added by the current file.
+        for (_, m) in reg.iter_modules() {
+            for dep in &m.deps {
+                let path = PathBuf::from(dep.name.as_ref().unwrap());
+                if !seen.contains(&path) {
+                    files.push_back(path);
+                }
+            }
+        }
+
+        seen.insert(path);
     }
 
     compile(&mut reg).map_err(|e| anyhow!(e))?;
 
-    println!();
-
-    for (d, m) in reg.iter_modules() {
-        println!("{}: {}", d, m);
-    }
-
-    for (d, e) in reg.iter_enums() {
-        println!("{}: {}", d, e);
-    }
-
-    for (d, m) in reg.iter_messages() {
-        println!("{}: {}", d, m);
+    if args.bindings.gdscript {
+        let mut gdscript = generate::gdscript::<FileWriter>();
+        generate(out_dir, &mut reg, &mut gdscript)?;
     }
 
     Ok(())

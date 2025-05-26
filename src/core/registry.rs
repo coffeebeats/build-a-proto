@@ -93,6 +93,13 @@ impl Registry {
             _ => None,
         })
     }
+
+    pub fn iter_modules_mut(&mut self) -> impl Iterator<Item = (&Descriptor, &mut Module)> + '_ {
+        self.0.iter_mut().filter_map(|(key, kind)| match kind {
+            Kind::Module(m) => Some((key, m)),
+            _ => None,
+        })
+    }
 }
 
 /* -------------------------------------------------------------------------- */
