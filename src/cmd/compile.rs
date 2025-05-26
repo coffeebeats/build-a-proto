@@ -108,7 +108,7 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
         // modules to the queue of files to process. Note that all
         // imports will be inserted because this design does not
         // distinguish the dependencies added by the current file.
-        for (_, m) in (&reg).iter_modules() {
+        for (_, m) in reg.iter_modules() {
             for dep in &m.deps {
                 let path = PathBuf::from(dep.name.as_ref().unwrap());
                 if !seen.contains(&path) {

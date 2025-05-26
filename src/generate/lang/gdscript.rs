@@ -208,7 +208,7 @@ impl<W: Writer> Generator<W> for GDScript {
             }
         }
 
-        self.0.write(w, &format!("{}", render_type(&f.typ)))?;
+        self.0.write(w, &render_type(&f.typ).to_string())?;
         self.0.newline(w)?;
 
         Ok(())
