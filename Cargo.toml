@@ -15,4 +15,4 @@
   thiserror      = "2.0.12"
 
 [dev-dependencies]
-  rstest = {version = "0.25.0", default-features = false}
+  rstest = {version = "0.26.1", default-features = false}
