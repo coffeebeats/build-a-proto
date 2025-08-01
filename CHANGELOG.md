@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.4 (2025-08-01)
+
+## What's Changed
+* chore(deps): bump clap from 4.5.38 to 4.5.39 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/20
+* chore(deps): bump rstest from 0.25.0 to 0.26.1 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/24
+* chore(deps): bump clap from 4.5.39 to 4.5.42 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/23
+
+## New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/coffeebeats/build-a-proto/pull/20
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.1.3...v0.1.4
+
 ## 0.1.3 (2025-05-26)
 
 ## What's Changed
