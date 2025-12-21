@@ -195,7 +195,7 @@ jobs:
             --all-targets
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
         if: needs.changes.outputs.has_source_change == 'true'
         with:
           fail_ci_if_error: true
