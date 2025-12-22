@@ -6,7 +6,7 @@
   rust-version = "1.87.0"
 
 [dependencies]
-  anyhow         = "1.0.98"
+  anyhow         = "1.0.100"
   ariadne        = {version = "0.5.1", features = ["auto-color"]}
   chumsky        = {version = "0.12.0", features = ["lexical-numbers"]}
   clap           = {version = "4.5.42", features = ["cargo", "derive"]}
