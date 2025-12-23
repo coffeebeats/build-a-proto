@@ -15,4 +15,5 @@
   thiserror      = "2.0.17"
 
 [dev-dependencies]
-  rstest = {version = "0.26.1", default-features = false}
+  rstest   = {version = "0.26.1", default-features = false}
+  tempfile = "3.20"
