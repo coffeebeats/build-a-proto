@@ -128,6 +128,11 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
         seen.insert(path);
     }
 
+    // TODO: Implement full cyclical dependency detection here. At this point,
+    // all modules have been registered in the registry with their dependencies
+    // recorded in `Module.deps`. Build a dependency graph and detect cycles
+    // (e.g., A → B → C → A) before proceeding with compilation.
+
     compile(&mut reg).map_err(|e| anyhow!(e))?;
 
     if args.bindings.gdscript {
