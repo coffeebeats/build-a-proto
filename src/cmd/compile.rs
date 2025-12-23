@@ -33,6 +33,12 @@ pub struct Args {
     #[arg(short, long, value_name = "OUT_DIR")]
     out: Option<PathBuf>,
 
+    /// A root directory to search for imported '.baproto' files. Can be
+    /// specified multiple times. Imports are resolved by searching each root in
+    /// order. If not specified, defaults to the current working directory.
+    #[arg(short = 'I', long = "import_root", value_name = "DIR")]
+    import_roots: Vec<PathBuf>,
+
     /// A path to a message definition file to compile.
     #[arg(value_name = "FILES", required = true, num_args = 1..)]
     files: Vec<PathBuf>,
@@ -65,6 +71,8 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
     let mut seen = HashSet::<PathBuf>::with_capacity(args.files.len());
     let mut files = VecDeque::<PathBuf>::from(args.files);
 
+    let import_roots = parse_import_roots(args.import_roots)?;
+
     while !files.is_empty() {
         let path = files
             .pop_front()
@@ -93,7 +101,7 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             parse_errs = errs;
 
             if let Some(exprs) = exprs {
-                if let Err(err) = prepare(&path, &mut reg, exprs) {
+                if let Err(err) = prepare(&path, &import_roots, &mut reg, exprs) {
                     parse_errs.push(err);
                 }
             }
@@ -182,4 +190,29 @@ fn parse_out_dir(out_dir: Option<impl AsRef<Path>>) -> anyhow::Result<PathBuf> {
     }
 
     Ok(path.canonicalize()?)
+}
+
+/* ------------------------- Fn: parse_import_roots ------------------------- */
+
+/// `parse_import_roots` validates and canonicalizes the import root
+/// directories. If no roots are provided, defaults to the current working
+/// directory.
+fn parse_import_roots(roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
+    if roots.is_empty() {
+        return Ok(vec![std::env::current_dir()?.canonicalize()?]);
+    }
+
+    roots
+        .into_iter()
+        .map(|root| {
+            if !root.is_dir() {
+                return Err(anyhow!(
+                    "invalid import root: '{}' is not a directory",
+                    root.display()
+                ));
+            }
+
+            root.canonicalize().map_err(|e| anyhow!(e))
+        })
+        .collect()
 }
