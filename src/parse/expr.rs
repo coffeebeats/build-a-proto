@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use chumsky::extra::ParserExtra;
 use chumsky::input::MapExtra;
 use chumsky::input::ValueInput;
@@ -21,7 +23,7 @@ pub enum Expr<'src> {
 
     // Metadata
     Comment(&'src str),
-    Include(&'src str),
+    Include(PathBuf),
     Package(&'src str),
 
     // Properties
