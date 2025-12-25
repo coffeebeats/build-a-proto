@@ -58,6 +58,7 @@ pub struct ImportRoot(PathBuf);
 
 impl ImportRoot {
     /// `as_path` returns the path as a `&Path`.
+    #[allow(unused)]
     pub fn as_path(&self) -> &Path {
         &self.0
     }

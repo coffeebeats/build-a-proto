@@ -6,6 +6,7 @@ use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
 use crate::core::EnumBuilder;
 use crate::core::Field;
+use crate::core::ImportRoot;
 use crate::core::MessageBuilder;
 use crate::core::Registry;
 use crate::core::VariantKind;
@@ -20,7 +21,7 @@ use crate::parse::Span;
 
 pub fn prepare<'a, P: AsRef<Path>>(
     path: &'a P,
-    import_roots: &[PathBuf],
+    import_roots: &[ImportRoot],
     registry: &'a mut Registry,
     exprs: Vec<(Expr<'a>, Span)>,
 ) -> Result<(), ParseError<'a>> {
@@ -179,54 +180,29 @@ pub fn prepare<'a, P: AsRef<Path>>(
 
 /// Resolves an include path by searching through import roots in order.
 ///
-/// Import roots must be pre-validated (canonicalized and verified as
-/// directories) by the CLI argument parser. This function assumes all roots are
-/// valid to avoid redundant validation during compilation.
-///
 /// For each root, the function checks if `root/<dependency path>` exists as a
-/// file. The first match is returned as a canonicalized path. Paths that escape
-/// their import root (via symlinks) are silently skipped to prevent filesystem
-/// information leakage.
+/// `.baproto` file. The first match is returned.
 fn resolve_include_path<'a>(
     path: &Path,
-    import_roots: &[PathBuf],
+    import_roots: &[ImportRoot],
     span: Span,
 ) -> Result<PathBuf, ParseError<'a>> {
-    let path_resolved = import_roots
+    import_roots
         .iter()
         .find_map(|root| {
-            let path_candidate = root.join(path);
-
-            if !path_candidate.is_file() {
-                return None;
-            }
-
-            let path_actual = path_candidate.canonicalize().ok()?;
-
-            // Ensure the canonical path is still within the import root. This is
-            // a defense against symlinks or other filesystem tricks. We silently
-            // skip rather than error to avoid leaking filesystem information.
-            if !path_actual.starts_with(root) {
-                return None;
-            }
-
-            Some(path_actual)
+            root.resolve_schema_import(path)
+                .ok()
+                .map(|schema| schema.as_path().to_path_buf())
         })
         .ok_or_else(|| {
             Rich::custom(
                 span,
                 format!(
-                    "include path '{}' not found in any import root: {:?}",
+                    "include path '{}' not found in any import root",
                     path.display(),
-                    import_roots
-                        .iter()
-                        .map(|p| p.display().to_string())
-                        .collect::<Vec<_>>()
                 ),
             )
-        })?;
-
-    Ok(path_resolved)
+        })
 }
 
 /* -------------------------------------------------------------------------- */
@@ -246,7 +222,7 @@ mod tests {
         let file_path = root.path().join("dep.baproto");
         fs::write(&file_path, "").unwrap();
 
-        let import_roots = vec![root.path().canonicalize().unwrap()];
+        let import_roots = vec![ImportRoot::try_from(root.path()).unwrap()];
         let span = Span::from(0..10);
 
         // When: The include path is resolved.
@@ -266,8 +242,8 @@ mod tests {
         fs::write(&file_path, "").unwrap();
 
         let import_roots = vec![
-            root1.path().canonicalize().unwrap(),
-            root2.path().canonicalize().unwrap(),
+            ImportRoot::try_from(root1.path()).unwrap(),
+            ImportRoot::try_from(root2.path()).unwrap(),
         ];
         let span = Span::from(0..10);
 
@@ -290,8 +266,8 @@ mod tests {
         fs::write(&file2, "second").unwrap();
 
         let import_roots = vec![
-            root1.path().canonicalize().unwrap(),
-            root2.path().canonicalize().unwrap(),
+            ImportRoot::try_from(root1.path()).unwrap(),
+            ImportRoot::try_from(root2.path()).unwrap(),
         ];
         let span = Span::from(0..10);
 
@@ -312,7 +288,7 @@ mod tests {
         let file_path = nested_dir.join("dep.baproto");
         fs::write(&file_path, "").unwrap();
 
-        let import_roots = vec![root.path().canonicalize().unwrap()];
+        let import_roots = vec![ImportRoot::try_from(root.path()).unwrap()];
         let span = Span::from(0..10);
 
         // When: The include path with subdirectories is resolved.
@@ -327,7 +303,7 @@ mod tests {
     fn test_resolve_include_path_not_found_returns_error() {
         // Given: A temp directory without the requested file.
         let root = TempDir::new().unwrap();
-        let import_roots = vec![root.path().canonicalize().unwrap()];
+        let import_roots = vec![ImportRoot::try_from(root.path()).unwrap()];
         let span = Span::from(0..10);
 
         // When: A non-existent include path is resolved.
