@@ -1,7 +1,6 @@
 use chumsky::error::Rich;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
@@ -180,43 +179,73 @@ pub fn prepare<'a, P: AsRef<Path>>(
 
 /// Resolves an include path by searching through import roots in order.
 ///
-/// For each import root, the function checks if `root/dep_path` exists as a
-/// file. The first match is returned as a canonicalized path. If no match is
-/// found in any root, an error is returned.
+/// For each import root, the function checks if `root/<depenency path>` exists
+/// as a file. The first match is returned as a canonicalized path. If no match
+/// is found in any root, an error is returned.
 fn resolve_include_path<'a>(
-    dep_path: &str,
+    path: &str,
     import_roots: &[PathBuf],
     span: Span,
 ) -> Result<PathBuf, ParseError<'a>> {
-    let dep = PathBuf::from_str(dep_path).map_err(|err| {
-        Rich::custom(span, format!("{}: invalid include path: {}", err, dep_path))
+    let path = PathBuf::from(path);
+
+    let (path, path_root) = import_roots
+        .iter()
+        .find_map(|root| {
+            let candidate = root.join(path);
+
+            if candidate.is_file() {
+                Some((candidate, root))
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            Rich::custom(
+                span,
+                format!(
+                    "include path '{}' not found in any import root: {:?}",
+                    path.display(),
+                    import_roots
+                        .iter()
+                        .map(|p| p.display().to_string())
+                        .collect::<Vec<_>>()
+                ),
+            )
+        })?;
+
+    let path = path.canonicalize().map_err(|e| {
+        Rich::custom(
+            span,
+            format!("failed to resolve '{}': {}", path.display(), e),
+        )
     })?;
 
-    let resolved = if dep.is_absolute() {
-        dep
-    } else {
-        import_roots
-            .iter()
-            .map(|root| root.join(&dep))
-            .find(|candidate| candidate.is_file())
-            .ok_or_else(|| {
-                Rich::custom(
-                    span,
-                    format!(
-                        "include path '{}' not found in any import root: {:?}",
-                        dep_path,
-                        import_roots
-                            .iter()
-                            .map(|p| p.display().to_string())
-                            .collect::<Vec<_>>()
-                    ),
-                )
-            })?
-    };
+    // Ensure the canonical path is still within the import root. This is a
+    // defense against symlinks or other filesystem tricks.
+    let path_root = path_root.canonicalize().map_err(|e| {
+        Rich::custom(
+            span,
+            format!(
+                "failed to canonicalize import root '{}': {}",
+                path_root.display(),
+                e
+            ),
+        )
+    })?;
 
-    resolved
-        .canonicalize()
-        .map_err(|e| Rich::custom(span, format!("failed to resolve '{}': {}", dep_path, e)))
+    if !path.starts_with(&path_root) {
+        return Err(Rich::custom(
+            span,
+            format!(
+                "resolved path '{}' escapes import root '{}'",
+                path.display(),
+                path_root.display(),
+            ),
+        ));
+    }
+
+    Ok(path)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -240,7 +269,7 @@ mod tests {
         let span = Span::from(0..10);
 
         // When: The include path is resolved.
-        let result = resolve_include_path("dep.baproto", &import_roots, span);
+        let result = resolve_include_path(Path::new("dep.baproto"), &import_roots, span);
 
         // Then: The resolved path points to the file.
         assert!(result.is_ok());
@@ -262,7 +291,7 @@ mod tests {
         let span = Span::from(0..10);
 
         // When: The include path is resolved.
-        let result = resolve_include_path("dep.baproto", &import_roots, span);
+        let result = resolve_include_path(Path::new("dep.baproto"), &import_roots, span);
 
         // Then: The resolved path points to the file in the second root.
         assert!(result.is_ok());
@@ -286,7 +315,7 @@ mod tests {
         let span = Span::from(0..10);
 
         // When: The include path is resolved.
-        let result = resolve_include_path("dep.baproto", &import_roots, span);
+        let result = resolve_include_path(Path::new("dep.baproto"), &import_roots, span);
 
         // Then: The resolved path points to the file in the first root.
         assert!(result.is_ok());
@@ -306,7 +335,7 @@ mod tests {
         let span = Span::from(0..10);
 
         // When: The include path with subdirectories is resolved.
-        let result = resolve_include_path("sub/dir/dep.baproto", &import_roots, span);
+        let result = resolve_include_path(Path::new("sub/dir/dep.baproto"), &import_roots, span);
 
         // Then: The resolved path points to the nested file.
         assert!(result.is_ok());
@@ -321,7 +350,7 @@ mod tests {
         let span = Span::from(0..10);
 
         // When: A non-existent include path is resolved.
-        let result = resolve_include_path("missing.baproto", &import_roots, span);
+        let result = resolve_include_path(Path::new("missing.baproto"), &import_roots, span);
 
         // Then: An error is returned.
         assert!(result.is_err());
