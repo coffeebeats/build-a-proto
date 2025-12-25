@@ -47,7 +47,7 @@ pub fn prepare<'a, P: AsRef<Path>>(
                 module.deps.push(
                     DescriptorBuilder::default()
                         .name(
-                            resolve_include_path(include, import_roots, span)?
+                            resolve_include_path(&include, import_roots, span)?
                                 .to_str()
                                 .unwrap(),
                         )
@@ -183,7 +183,7 @@ pub fn prepare<'a, P: AsRef<Path>>(
 /// as a file. The first match is returned as a canonicalized path. If no match
 /// is found in any root, an error is returned.
 fn resolve_include_path<'a>(
-    path: &str,
+    path: &Path,
     import_roots: &[PathBuf],
     span: Span,
 ) -> Result<PathBuf, ParseError<'a>> {
@@ -192,7 +192,7 @@ fn resolve_include_path<'a>(
     let (path, path_root) = import_roots
         .iter()
         .find_map(|root| {
-            let candidate = root.join(path);
+            let candidate = root.join(&path);
 
             if candidate.is_file() {
                 Some((candidate, root))
