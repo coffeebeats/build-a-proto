@@ -1,10 +1,13 @@
+use std::collections::HashSet;
+use std::path::PathBuf;
+
 use chumsky::Parser;
 use chumsky::extra::ParserExtra;
 use chumsky::input::Emitter;
 use chumsky::input::MapExtra;
 use chumsky::input::ValueInput;
 use chumsky::prelude::*;
-use std::collections::HashSet;
+use thiserror::Error;
 
 use crate::core::Encoding;
 
@@ -19,6 +22,25 @@ use super::Token;
 use super::Type;
 use super::Variant;
 use super::VariantKind;
+
+/* -------------------------------------------------------------------------- */
+/*                            Enum: ImportPathError                           */
+/* -------------------------------------------------------------------------- */
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum ImportPathError {
+    #[error("relative segment '{0}' not allowed in import path")]
+    RelativeSegment(String),
+
+    #[error("import path must end with '.baproto'")]
+    InvalidExtension,
+
+    #[error("path segment cannot end with '.': {0}")]
+    TrailingDot(String),
+
+    #[error("filename cannot be just '.baproto'")]
+    EmptyFilename,
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                  Fn: Parse                                 */
@@ -65,6 +87,20 @@ where
     let include = just(Token::Keyword(Keyword::Include))
         .ignore_then(string)
         .then_ignore(just(Token::Semicolon))
+        .map_with(|s: &str, e| (s, e.span()))
+        .validate(
+            |(s, span), _, emitter| match import_path().parse(s).into_result() {
+                Ok(path) => path,
+                Err(errs) => {
+                    for err in errs {
+                        let msg = format!("{}", err.reason());
+                        emitter.emit(Rich::custom(span, msg));
+                    }
+
+                    PathBuf::new()
+                }
+            },
+        )
         .map(Expr::Include)
         .map_with(Expr::with_span)
         .labelled("include")
@@ -341,6 +377,58 @@ where
     missing.or(ast)
 }
 
+/* ----------------------------- Fn: import_path ---------------------------- */
+
+/// Parses an import path string into a [`PathBuf`].
+///
+/// Valid paths:
+/// - `foo.baproto`
+/// - `foo/bar/baz.baproto`
+///
+/// Invalid paths:
+/// - `./foo.baproto` (relative segment)
+/// - `../foo.baproto` (relative segment)
+/// - `foo/bar` (missing .baproto extension)
+/// - `foo./bar` (trailing '.' character)
+/// - `.baproto` (empty filename)
+fn import_path<'a>() -> impl Parser<'a, &'a str, PathBuf, extra::Err<Rich<'a, char>>> {
+    let character =
+        any().filter(|c: &char| c.is_ascii_alphanumeric() || ['_', '-', '.'].contains(c));
+
+    let segment = character
+        .repeated()
+        .at_least(1)
+        .collect::<String>()
+        .try_map(|s, span| {
+            if s == "." || s == ".." {
+                Err(Rich::custom(span, ImportPathError::RelativeSegment(s)))
+            } else if s.ends_with(".") {
+                Err(Rich::custom(span, ImportPathError::TrailingDot(s)))
+            } else {
+                Ok(s)
+            }
+        });
+
+    segment
+        .separated_by(just('/'))
+        .at_least(1)
+        .collect::<Vec<String>>()
+        .try_map(|segments, span| {
+            let last = segments.last().unwrap();
+
+            if !last.ends_with(".baproto") {
+                return Err(Rich::custom(span, ImportPathError::InvalidExtension));
+            }
+
+            if last == ".baproto" {
+                return Err(Rich::custom(span, ImportPathError::EmptyFilename));
+            }
+
+            Ok(segments.into_iter().collect::<PathBuf>())
+        })
+        .then_ignore(end())
+}
+
 /* -------------------------- Fn: check_field_names ------------------------- */
 
 fn check_field_names<'src, I, Ex>(
@@ -478,11 +566,11 @@ mod tests {
             Token::Newline,
             Token::Newline, // Two line breaks!
             Token::Keyword(Keyword::Include),
-            Token::String("../a/b/c.ext"),
+            Token::String("a/b/c.baproto"),
             Token::Semicolon,
             // No line break!
             Token::Keyword(Keyword::Include),
-            Token::String("d.ext"),
+            Token::String("d.baproto"),
             Token::Semicolon,
         ];
 
@@ -495,10 +583,139 @@ mod tests {
         // Then: The output expression list matches expectations.
         let exprs = vec![
             (Expr::Package("abc.def"), Span::from(1..4)),
-            (Expr::Include("../a/b/c.ext"), Span::from(6..9)),
-            (Expr::Include("d.ext"), Span::from(9..12)),
+            (
+                Expr::Include(PathBuf::from("a/b/c.baproto")),
+                Span::from(6..9),
+            ),
+            (Expr::Include(PathBuf::from("d.baproto")), Span::from(9..12)),
         ];
         assert_eq!(output.output(), Some(&exprs));
+    }
+
+    #[test]
+    fn test_include_rejects_dot_prefix() {
+        // Given: An input with a ./ prefixed include path.
+        let input = vec![
+            Token::Newline,
+            Token::Keyword(Keyword::Include),
+            Token::String("./local/file.baproto"),
+            Token::Semicolon,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has an error (relative paths with . are rejected).
+        assert_eq!(output.errors().count(), 1);
+        assert_eq!(
+            output.into_errors().first().unwrap().reason().to_string(),
+            ImportPathError::RelativeSegment(".".to_owned()).to_string()
+        );
+    }
+
+    #[test]
+    fn test_include_rejects_dotdot_prefix() {
+        // Given: An input with a ../ prefixed include path.
+        let input = vec![
+            Token::Newline,
+            Token::Keyword(Keyword::Include),
+            Token::String("../parent/file.baproto"),
+            Token::Semicolon,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has an error (relative paths with .. are rejected).
+        assert_eq!(output.errors().count(), 1);
+        assert_eq!(
+            output.into_errors().first().unwrap().reason().to_string(),
+            ImportPathError::RelativeSegment("..".to_owned()).to_string()
+        );
+    }
+
+    #[test]
+    fn test_include_rejects_trailing_dot() {
+        // Given: An input with a '.' suffix in include path.
+        let input = vec![
+            Token::Newline,
+            Token::Keyword(Keyword::Include),
+            Token::String("foo./bar.baproto"),
+            Token::Semicolon,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has an error (relative paths with . are rejected).
+        assert_eq!(output.errors().count(), 1);
+        assert_eq!(
+            output.into_errors().first().unwrap().reason().to_string(),
+            ImportPathError::TrailingDot("foo.".to_owned()).to_string()
+        );
+    }
+
+    #[test]
+    fn test_include_rejects_missing_extension() {
+        // Given: An input with a path missing the .baproto extension.
+        let input = vec![
+            Token::Newline,
+            Token::Keyword(Keyword::Include),
+            Token::String("foo/bar"),
+            Token::Semicolon,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has an error (paths without .baproto are rejected).
+        assert_eq!(output.errors().count(), 1);
+        assert_eq!(
+            output.into_errors().first().unwrap().reason().to_string(),
+            ImportPathError::InvalidExtension.to_string()
+        );
+    }
+
+    #[test]
+    fn test_include_rejects_wrong_extension() {
+        // Given: An input with a wrong extension.
+        let input = vec![
+            Token::Newline,
+            Token::Keyword(Keyword::Include),
+            Token::String("foo/bar.txt"),
+            Token::Semicolon,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has an error (paths without .baproto are rejected).
+        assert_eq!(output.errors().count(), 1);
+        assert_eq!(
+            output.into_errors().first().unwrap().reason().to_string(),
+            ImportPathError::InvalidExtension.to_string()
+        );
+    }
+
+    #[test]
+    fn test_include_rejects_empty_filename() {
+        // Given: An input with just '.baproto' as the filename.
+        let input = vec![
+            Token::Newline,
+            Token::Keyword(Keyword::Include),
+            Token::String(".baproto"),
+            Token::Semicolon,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has an error (empty filename is rejected).
+        assert_eq!(output.errors().count(), 1);
+        assert_eq!(
+            output.into_errors().first().unwrap().reason().to_string(),
+            ImportPathError::EmptyFilename.to_string()
+        );
     }
 
     #[test]

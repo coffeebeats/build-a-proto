@@ -1,7 +1,6 @@
 use chumsky::error::Rich;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
@@ -21,6 +20,7 @@ use crate::parse::Span;
 
 pub fn prepare<'a, P: AsRef<Path>>(
     path: &'a P,
+    import_roots: &[PathBuf],
     registry: &'a mut Registry,
     exprs: Vec<(Expr<'a>, Span)>,
 ) -> Result<(), ParseError<'a>> {
@@ -43,11 +43,11 @@ pub fn prepare<'a, P: AsRef<Path>>(
                 // HACK: This is a simple enough way to get around the fact that
                 // other modules don't exist yet and we don't have access to a
                 // cross-module cache. A second pass will be required to properly
-                // link modules in the [`Registry`].
+                // link modules in the `Registry`.
                 module.deps.push(
                     DescriptorBuilder::default()
                         .name(
-                            parse_include_path(path.as_ref().to_str().unwrap(), include, span)?
+                            resolve_include_path(&include, import_roots, span)?
                                 .to_str()
                                 .unwrap(),
                         )
@@ -175,43 +175,165 @@ pub fn prepare<'a, P: AsRef<Path>>(
     Ok(())
 }
 
-/* ------------------------- Fn: parse_include_path ------------------------- */
+/* ------------------------ Fn: resolve_include_path ------------------------ */
 
-fn parse_include_path<'a>(
-    src_path: &str,
-    dep_path: &str,
+/// Resolves an include path by searching through import roots in order.
+///
+/// Import roots must be pre-validated (canonicalized and verified as
+/// directories) by the CLI argument parser. This function assumes all roots are
+/// valid to avoid redundant validation during compilation.
+///
+/// For each root, the function checks if `root/<dependency path>` exists as a
+/// file. The first match is returned as a canonicalized path. Paths that escape
+/// their import root (via symlinks) are silently skipped to prevent filesystem
+/// information leakage.
+fn resolve_include_path<'a>(
+    path: &Path,
+    import_roots: &[PathBuf],
     span: Span,
 ) -> Result<PathBuf, ParseError<'a>> {
-    match PathBuf::from_str(dep_path) {
-        Err(err) => Err(Rich::custom(
-            span,
-            format!("{}: invalid include path: {}", err, dep_path),
-        )),
-        Ok(mut p) => {
-            debug_assert!(p.to_str().is_some());
+    let path_resolved = import_roots
+        .iter()
+        .find_map(|root| {
+            let path_candidate = root.join(path);
 
-            if p.is_relative() {
-                debug_assert!(PathBuf::from_str(src_path).is_ok());
-
-                if let Some(parent) = PathBuf::from_str(src_path).unwrap().parent() {
-                    let mut path = PathBuf::default();
-                    path.push(parent);
-                    path.push(p);
-                    p = path.to_path_buf();
-                }
+            if !path_candidate.is_file() {
+                return None;
             }
 
-            if p.to_str() == Some(src_path) {
-                return Err(Rich::custom(
-                    span,
-                    format!(
-                        "dependency cycle: invalid include path '{:?}' from file: {:?}",
-                        dep_path, src_path,
-                    ),
-                ));
+            let path_actual = path_candidate.canonicalize().ok()?;
+
+            // Ensure the canonical path is still within the import root. This is
+            // a defense against symlinks or other filesystem tricks. We silently
+            // skip rather than error to avoid leaking filesystem information.
+            if !path_actual.starts_with(root) {
+                return None;
             }
 
-            Ok(p)
-        }
+            Some(path_actual)
+        })
+        .ok_or_else(|| {
+            Rich::custom(
+                span,
+                format!(
+                    "include path '{}' not found in any import root: {:?}",
+                    path.display(),
+                    import_roots
+                        .iter()
+                        .map(|p| p.display().to_string())
+                        .collect::<Vec<_>>()
+                ),
+            )
+        })?;
+
+    Ok(path_resolved)
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Mod: tests                                 */
+/* -------------------------------------------------------------------------- */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_resolve_include_path_finds_file_in_first_root() {
+        // Given: A temp directory with a .baproto file.
+        let root = TempDir::new().unwrap();
+        let file_path = root.path().join("dep.baproto");
+        fs::write(&file_path, "").unwrap();
+
+        let import_roots = vec![root.path().canonicalize().unwrap()];
+        let span = Span::from(0..10);
+
+        // When: The include path is resolved.
+        let result = resolve_include_path(Path::new("dep.baproto"), &import_roots, span);
+
+        // Then: The resolved path points to the file.
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), file_path.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn test_resolve_include_path_searches_roots_in_order() {
+        // Given: Two temp directories, with the file only in the second.
+        let root1 = TempDir::new().unwrap();
+        let root2 = TempDir::new().unwrap();
+        let file_path = root2.path().join("dep.baproto");
+        fs::write(&file_path, "").unwrap();
+
+        let import_roots = vec![
+            root1.path().canonicalize().unwrap(),
+            root2.path().canonicalize().unwrap(),
+        ];
+        let span = Span::from(0..10);
+
+        // When: The include path is resolved.
+        let result = resolve_include_path(Path::new("dep.baproto"), &import_roots, span);
+
+        // Then: The resolved path points to the file in the second root.
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), file_path.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn test_resolve_include_path_prefers_first_root() {
+        // Given: Two temp directories, both with the same file name.
+        let root1 = TempDir::new().unwrap();
+        let root2 = TempDir::new().unwrap();
+        let file1 = root1.path().join("dep.baproto");
+        let file2 = root2.path().join("dep.baproto");
+        fs::write(&file1, "first").unwrap();
+        fs::write(&file2, "second").unwrap();
+
+        let import_roots = vec![
+            root1.path().canonicalize().unwrap(),
+            root2.path().canonicalize().unwrap(),
+        ];
+        let span = Span::from(0..10);
+
+        // When: The include path is resolved.
+        let result = resolve_include_path(Path::new("dep.baproto"), &import_roots, span);
+
+        // Then: The resolved path points to the file in the first root.
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), file1.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn test_resolve_include_path_nested_path() {
+        // Given: A temp directory with a nested .baproto file.
+        let root = TempDir::new().unwrap();
+        let nested_dir = root.path().join("sub").join("dir");
+        fs::create_dir_all(&nested_dir).unwrap();
+        let file_path = nested_dir.join("dep.baproto");
+        fs::write(&file_path, "").unwrap();
+
+        let import_roots = vec![root.path().canonicalize().unwrap()];
+        let span = Span::from(0..10);
+
+        // When: The include path with subdirectories is resolved.
+        let result = resolve_include_path(Path::new("sub/dir/dep.baproto"), &import_roots, span);
+
+        // Then: The resolved path points to the nested file.
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), file_path.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn test_resolve_include_path_not_found_returns_error() {
+        // Given: A temp directory without the requested file.
+        let root = TempDir::new().unwrap();
+        let import_roots = vec![root.path().canonicalize().unwrap()];
+        let span = Span::from(0..10);
+
+        // When: A non-existent include path is resolved.
+        let result = resolve_include_path(Path::new("missing.baproto"), &import_roots, span);
+
+        // Then: An error is returned.
+        assert!(result.is_err());
     }
 }

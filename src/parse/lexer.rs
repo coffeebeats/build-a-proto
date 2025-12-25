@@ -92,20 +92,21 @@ fn lexer<'src>()
     );
 
     let quote = just('"');
-    let string = quote
-        .ignore_then(any().and_is(quote.not()).repeated().to_slice().validate(
-            |input: &'src str, info, emitter| {
-                if input.chars().any(|c| c.is_newline()) {
-                    let msg = "invalid input: strings cannot contain line breaks";
-                    emitter.emit(Rich::custom(info.span(), msg));
+    let string = any()
+        .and_is(quote.not())
+        .repeated()
+        .to_slice()
+        .validate(|input: &'src str, info, emitter| {
+            if input.chars().any(|c| c.is_newline()) {
+                let msg = "invalid input: strings cannot contain line breaks";
+                emitter.emit(Rich::custom(info.span(), msg));
 
-                    return Token::Invalid(info.slice()).with_span(info);
-                }
+                return Token::Invalid(info.slice()).with_span(info);
+            }
 
-                Token::String(input).with_span(info)
-            },
-        ))
-        .then_ignore(quote);
+            Token::String(input).with_span(info)
+        })
+        .delimited_by(quote, quote);
 
     let comment = just("//").then(inline_whitespace().at_most(1)).ignore_then(
         any()
@@ -250,7 +251,7 @@ mod tests {
     #[test]
     fn test_input_with_include_keyword_returns_correct_token_list() {
         // Given: An input string.
-        let input = "include \"../a//b/'path with spaces'/file.ext\"";
+        let input = "include \"foo/bar/baz.baproto\"";
 
         // When: The input is lexed.
         let output = lexer().parse(input);
@@ -261,10 +262,7 @@ mod tests {
         // Then: The output token list matches expectations.
         let tokens = vec![
             (Token::Keyword(Keyword::Include), Span::from(0..7)),
-            (
-                Token::String("../a//b/'path with spaces'/file.ext"),
-                Span::from(9..44),
-            ),
+            (Token::String("foo/bar/baz.baproto"), Span::from(9..28)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
