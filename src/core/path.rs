@@ -425,7 +425,7 @@ mod tests {
         let symlink_result = std::os::unix::fs::symlink(&outside_file, &symlink_path);
         #[cfg(windows)]
         let symlink_result = std::os::windows::fs::symlink_file(&outside_file, &symlink_path);
-        assert!(!symlink_result.is_err());
+        assert!(symlink_result.is_ok());
 
         let root = ImportRoot::try_from(dir.path()).unwrap();
 
