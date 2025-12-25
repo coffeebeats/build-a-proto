@@ -179,26 +179,38 @@ pub fn prepare<'a, P: AsRef<Path>>(
 
 /// Resolves an include path by searching through import roots in order.
 ///
-/// For each import root, the function checks if `root/<depenency path>` exists
-/// as a file. The first match is returned as a canonicalized path. If no match
-/// is found in any root, an error is returned.
+/// Import roots must be pre-validated (canonicalized and verified as
+/// directories) by the CLI argument parser. This function assumes all roots are
+/// valid to avoid redundant validation during compilation.
+///
+/// For each root, the function checks if `root/<dependency path>` exists as a
+/// file. The first match is returned as a canonicalized path. Paths that escape
+/// their import root (via symlinks) are silently skipped to prevent filesystem
+/// information leakage.
 fn resolve_include_path<'a>(
     path: &Path,
     import_roots: &[PathBuf],
     span: Span,
 ) -> Result<PathBuf, ParseError<'a>> {
-    let path = PathBuf::from(path);
-
-    let (path, path_root) = import_roots
+    let path_resolved = import_roots
         .iter()
         .find_map(|root| {
-            let candidate = root.join(&path);
+            let path_candidate = root.join(path);
 
-            if candidate.is_file() {
-                Some((candidate, root))
-            } else {
-                None
+            if !path_candidate.is_file() {
+                return None;
             }
+
+            let path_actual = path_candidate.canonicalize().ok()?;
+
+            // Ensure the canonical path is still within the import root. This is
+            // a defense against symlinks or other filesystem tricks. We silently
+            // skip rather than error to avoid leaking filesystem information.
+            if !path_actual.starts_with(root) {
+                return None;
+            }
+
+            Some(path_actual)
         })
         .ok_or_else(|| {
             Rich::custom(
@@ -214,38 +226,7 @@ fn resolve_include_path<'a>(
             )
         })?;
 
-    let path = path.canonicalize().map_err(|e| {
-        Rich::custom(
-            span,
-            format!("failed to resolve '{}': {}", path.display(), e),
-        )
-    })?;
-
-    // Ensure the canonical path is still within the import root. This is a
-    // defense against symlinks or other filesystem tricks.
-    let path_root = path_root.canonicalize().map_err(|e| {
-        Rich::custom(
-            span,
-            format!(
-                "failed to canonicalize import root '{}': {}",
-                path_root.display(),
-                e
-            ),
-        )
-    })?;
-
-    if !path.starts_with(&path_root) {
-        return Err(Rich::custom(
-            span,
-            format!(
-                "resolved path '{}' escapes import root '{}'",
-                path.display(),
-                path_root.display(),
-            ),
-        ));
-    }
-
-    Ok(path)
+    Ok(path_resolved)
 }
 
 /* -------------------------------------------------------------------------- */
