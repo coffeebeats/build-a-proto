@@ -7,6 +7,7 @@ use crate::generate::Writer;
 /* -------------------------------------------------------------------------- */
 
 #[derive(Clone, Debug, Default)]
+#[allow(unused)]
 pub struct StringWriter(String);
 
 /* ------------------------------ Impl: Writer ------------------------------ */

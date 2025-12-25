@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 use crate::compile::compile;
 use crate::compile::prepare;
+use crate::core::ImportRoot;
 use crate::core::Registry;
 use crate::generate;
 use crate::generate::FileWriter;
@@ -202,22 +203,14 @@ fn parse_out_dir(out_dir: Option<impl AsRef<Path>>) -> anyhow::Result<PathBuf> {
 /// `parse_import_roots` validates and canonicalizes the import root
 /// directories. If no roots are provided, defaults to the current working
 /// directory.
-fn parse_import_roots(roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
+fn parse_import_roots(roots: Vec<PathBuf>) -> anyhow::Result<Vec<ImportRoot>> {
     if roots.is_empty() {
-        return Ok(vec![std::env::current_dir()?.canonicalize()?]);
+        let cwd = std::env::current_dir()?;
+        return Ok(vec![ImportRoot::try_from(cwd).map_err(|e| anyhow!(e))?]);
     }
 
     roots
         .into_iter()
-        .map(|root| {
-            if !root.is_dir() {
-                return Err(anyhow!(
-                    "invalid import root: '{}' is not a directory",
-                    root.display()
-                ));
-            }
-
-            root.canonicalize().map_err(|e| anyhow!(e))
-        })
+        .map(|root| ImportRoot::try_from(root).map_err(|e| anyhow!(e)))
         .collect()
 }
