@@ -88,8 +88,8 @@ where
         .ignore_then(string)
         .then_ignore(just(Token::Semicolon))
         .map_with(|s: &str, e| (s, e.span()))
-        .validate(|(s, span), _, emitter| {
-            match import_path().parse(s).into_result() {
+        .validate(
+            |(s, span), _, emitter| match import_path().parse(s).into_result() {
                 Ok(path) => path,
                 Err(errs) => {
                     for err in errs {
@@ -99,8 +99,8 @@ where
 
                     PathBuf::new()
                 }
-            }
-        })
+            },
+        )
         .map(Expr::Include)
         .map_with(Expr::with_span)
         .labelled("include")
