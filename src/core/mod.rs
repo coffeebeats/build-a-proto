@@ -1,5 +1,6 @@
 pub mod enumeration;
 pub mod message;
+pub mod path;
 pub mod registry;
 pub mod types;
 
@@ -10,6 +11,10 @@ pub use enumeration::*;
 /* ------------------------------ Mod: Message ------------------------------ */
 
 pub use message::*;
+
+/* -------------------------------- Mod: Path ------------------------------- */
+
+pub use path::*;
 
 /* ------------------------------ Mod: Registry ----------------------------- */
 
