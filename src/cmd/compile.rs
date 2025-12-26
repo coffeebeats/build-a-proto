@@ -10,6 +10,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::compile::compile;
+use crate::compile::link;
 use crate::compile::prepare;
 use crate::core::ImportRoot;
 use crate::core::Registry;
@@ -118,27 +119,22 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             return Err(anyhow!("Failed to parse file: {:?}", path));
         }
 
-        // HACK: Use first-pass module declaration to add imported
-        // modules to the queue of files to process. Note that all
-        // imports will be inserted because this design does not
-        // distinguish the dependencies added by the current file.
+        // Queue imported modules for processing.
         for (_, m) in reg.iter_modules() {
             for dep in &m.deps {
-                let path = PathBuf::from(dep.name.as_ref().unwrap());
-                if !seen.contains(&path) {
-                    files.push_back(path);
+                if !seen.contains(dep) {
+                    files.push_back(dep.clone());
                 }
             }
         }
 
-        seen.insert(path);
+        seen.insert(schema_import);
     }
 
-    // TODO: Implement full cyclical dependency detection here. At this point,
-    // all modules have been registered in the registry with their dependencies
-    // recorded in `Module.deps`. Build a dependency graph and detect cycles
-    // (e.g., A → B → C → A) before proceeding with compilation.
+    // Link phase: validate dependencies and detect cycles
+    link(&reg)?;
 
+    // Compile phase: type validation (future)
     compile(&mut reg).map_err(|e| anyhow!(e))?;
 
     if args.bindings.gdscript {
