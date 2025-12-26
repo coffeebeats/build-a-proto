@@ -1,6 +1,5 @@
 use chumsky::error::Rich;
 use std::path::Path;
-use std::path::PathBuf;
 
 use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
@@ -9,6 +8,7 @@ use crate::core::Field;
 use crate::core::ImportRoot;
 use crate::core::MessageBuilder;
 use crate::core::Registry;
+use crate::core::SchemaImport;
 use crate::core::VariantKind;
 use crate::core::registry;
 use crate::parse::Expr;
@@ -19,8 +19,8 @@ use crate::parse::Span;
 /*                                 Fn: Prepare                                */
 /* -------------------------------------------------------------------------- */
 
-pub fn prepare<'a, P: AsRef<Path>>(
-    path: &'a P,
+pub fn prepare<'a>(
+    schema_import: &'a SchemaImport,
     import_roots: &[ImportRoot],
     registry: &'a mut Registry,
     exprs: Vec<(Expr<'a>, Span)>,
@@ -28,7 +28,7 @@ pub fn prepare<'a, P: AsRef<Path>>(
     let mut enums: Vec<crate::parse::Enum> = vec![];
     let mut messages: Vec<crate::parse::Message> = vec![];
 
-    let mut module = crate::core::Module::new(path.as_ref().to_path_buf());
+    let mut module = crate::core::Module::new(schema_import.as_path().to_path_buf());
 
     // First, inspect all expressions so all definitions can be registered.
     for (expr, span) in exprs {
