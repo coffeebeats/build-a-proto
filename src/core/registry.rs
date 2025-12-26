@@ -1,6 +1,7 @@
 use derive_builder::Builder;
 use derive_more::Display;
 use std::collections::HashMap;
+use std::path::Path;
 
 use super::Enum;
 use super::Message;
@@ -63,6 +64,7 @@ impl Registry {
         self.0.insert(descriptor, kind)
     }
 
+    #[allow(dead_code)]
     pub fn remove(&mut self, descriptor: &Descriptor) -> Option<Kind> {
         self.0.remove(descriptor)
     }
@@ -71,6 +73,10 @@ impl Registry {
 /* ----------------------------- Impl: Iterator ----------------------------- */
 
 impl Registry {
+    pub fn get_module_by_path(&self, path: &Path) -> Option<(&Descriptor, &Module)> {
+        self.iter_modules().find(|(_, m)| m.path == path)
+    }
+
     #[allow(dead_code)]
     pub fn iter_enums(&self) -> impl Iterator<Item = (&Descriptor, &Enum)> + '_ {
         self.0.iter().filter_map(|(key, kind)| match kind {

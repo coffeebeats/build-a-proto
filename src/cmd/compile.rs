@@ -10,9 +10,11 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::compile::compile;
+use crate::compile::link;
 use crate::compile::prepare;
 use crate::core::ImportRoot;
 use crate::core::Registry;
+use crate::core::SchemaImport;
 use crate::generate;
 use crate::generate::FileWriter;
 use crate::generate::generate;
@@ -69,21 +71,25 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
 
     let mut reg = Registry::default();
 
-    let mut seen = HashSet::<PathBuf>::with_capacity(args.files.len());
-    let mut files = VecDeque::<PathBuf>::from(args.files);
+    let inputs: Vec<SchemaImport> = args
+        .files
+        .into_iter()
+        .map(|path| SchemaImport::try_from(path).map_err(|e| anyhow!(e)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut seen = HashSet::<SchemaImport>::with_capacity(inputs.len());
+    let mut files = VecDeque::<SchemaImport>::from(inputs);
 
     let import_roots = parse_import_roots(args.import_roots)?;
 
     while !files.is_empty() {
-        let path = files
-            .pop_front()
-            .unwrap()
-            .canonicalize()
-            .map_err(|e| anyhow!(e))?;
+        let schema_import = files.pop_front().unwrap();
 
-        if seen.contains(&path) {
+        if seen.contains(&schema_import) {
             continue;
         }
+
+        let path = schema_import.as_path();
 
         println!(
             "Compiling {:?} into {:?} (binding={})",
@@ -92,7 +98,7 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             if args.bindings.cpp { "cpp" } else { "gdscript" }
         );
 
-        let contents = std::fs::read_to_string(&path).map_err(|e| anyhow!(e))?;
+        let contents = std::fs::read_to_string(path).map_err(|e| anyhow!(e))?;
 
         let (tokens, lex_errs) = lex(&contents);
         let mut parse_errs = vec![];
@@ -102,7 +108,7 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             parse_errs = errs;
 
             if let Some(exprs) = exprs {
-                if let Err(err) = prepare(&path, &import_roots, &mut reg, exprs) {
+                if let Err(err) = prepare(&schema_import, &import_roots, &mut reg, exprs) {
                     parse_errs.push(err);
                 }
             }
@@ -113,27 +119,22 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             return Err(anyhow!("Failed to parse file: {:?}", path));
         }
 
-        // HACK: Use first-pass module declaration to add imported
-        // modules to the queue of files to process. Note that all
-        // imports will be inserted because this design does not
-        // distinguish the dependencies added by the current file.
+        // Queue imported modules for processing.
         for (_, m) in reg.iter_modules() {
             for dep in &m.deps {
-                let path = PathBuf::from(dep.name.as_ref().unwrap());
-                if !seen.contains(&path) {
-                    files.push_back(path);
+                if !seen.contains(dep) {
+                    files.push_back(dep.clone());
                 }
             }
         }
 
-        seen.insert(path);
+        seen.insert(schema_import);
     }
 
-    // TODO: Implement full cyclical dependency detection here. At this point,
-    // all modules have been registered in the registry with their dependencies
-    // recorded in `Module.deps`. Build a dependency graph and detect cycles
-    // (e.g., A → B → C → A) before proceeding with compilation.
+    // Link phase: validate dependencies and detect cycles
+    link(&reg)?;
 
+    // Compile phase: type validation (future)
     compile(&mut reg).map_err(|e| anyhow!(e))?;
 
     if args.bindings.gdscript {
