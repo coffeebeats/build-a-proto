@@ -96,9 +96,11 @@ pub fn generate<P: AsRef<Path>, W: Writer, G: Generator<W>>(
 
         g.mod_begin(r, (d, m), w)?;
 
-        for d in &m.deps {
-            let dep = r.get_module(d).ok_or(anyhow!("missing module: {}", d))?;
-            g.gen_include(r, (d, dep), w)?;
+        for dep_path in &m.deps {
+            let (dep_desc, dep) = r
+                .get_module_by_path(dep_path.as_path())
+                .ok_or(anyhow!("missing module: {:?}", dep_path))?;
+            g.gen_include(r, (dep_desc, dep), w)?;
         }
 
         for d in &m.enums {
