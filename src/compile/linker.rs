@@ -52,7 +52,7 @@ pub fn link(registry: &Registry) -> Result<(), LinkError> {
     }
 
     // 2. Validate that all module dependencies were registered.
-    for (_, deps) in &graph {
+    for deps in graph.values() {
         for dep in deps {
             if !graph.contains_key(dep) {
                 return Err(LinkError::MissingInclude(dep.clone()));
@@ -163,7 +163,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             LinkError::CircularDependency(cycle) => {
-                assert!(cycle.len() >= 1);
+                assert!(!cycle.is_empty());
             }
             _ => panic!("Expected CircularDependency error"),
         }
