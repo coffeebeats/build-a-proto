@@ -184,7 +184,7 @@ impl AsRef<Path> for ImportRoot {
 ///     1. The path must point to a file (not a directory)
 ///     2. The path is canonicalized (absolute, symlinks resolved)
 ///     3. The file has a `.baproto` extension
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SchemaImport(PathBuf);
 
 /* --------------------------- Impl: SchemaImport --------------------------- */
