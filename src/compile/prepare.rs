@@ -1,6 +1,5 @@
 use chumsky::error::Rich;
 use std::path::Path;
-use std::path::PathBuf;
 
 use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
@@ -9,6 +8,7 @@ use crate::core::Field;
 use crate::core::ImportRoot;
 use crate::core::MessageBuilder;
 use crate::core::Registry;
+use crate::core::SchemaImport;
 use crate::core::VariantKind;
 use crate::core::registry;
 use crate::parse::Expr;
@@ -19,8 +19,8 @@ use crate::parse::Span;
 /*                                 Fn: Prepare                                */
 /* -------------------------------------------------------------------------- */
 
-pub fn prepare<'a, P: AsRef<Path>>(
-    path: &'a P,
+pub fn prepare<'a>(
+    schema_import: &'a SchemaImport,
     import_roots: &[ImportRoot],
     registry: &'a mut Registry,
     exprs: Vec<(Expr<'a>, Span)>,
@@ -28,7 +28,7 @@ pub fn prepare<'a, P: AsRef<Path>>(
     let mut enums: Vec<crate::parse::Enum> = vec![];
     let mut messages: Vec<crate::parse::Message> = vec![];
 
-    let mut module = crate::core::Module::new(path.as_ref().to_path_buf());
+    let mut module = crate::core::Module::new(schema_import.as_path().to_path_buf());
 
     // First, inspect all expressions so all definitions can be registered.
     for (expr, span) in exprs {
@@ -41,20 +41,9 @@ pub fn prepare<'a, P: AsRef<Path>>(
                 module.package = pkg.split(".").map(str::to_owned).collect();
             }
             Expr::Include(include) => {
-                // HACK: This is a simple enough way to get around the fact that
-                // other modules don't exist yet and we don't have access to a
-                // cross-module cache. A second pass will be required to properly
-                // link modules in the `Registry`.
-                module.deps.push(
-                    DescriptorBuilder::default()
-                        .name(
-                            resolve_include_path(&include, import_roots, span)?
-                                .to_str()
-                                .unwrap(),
-                        )
-                        .build()
-                        .unwrap(),
-                )
+                module
+                    .deps
+                    .push(resolve_include_path(&include, import_roots, span)?);
             }
             _ => unreachable!(),
         }
@@ -180,20 +169,15 @@ pub fn prepare<'a, P: AsRef<Path>>(
 
 /// Resolves an include path by searching through import roots in order.
 ///
-/// For each root, the function checks if `root/<dependency path>` exists as a
-/// `.baproto` file. The first match is returned.
+/// Returns a validated SchemaImport for the first matching .baproto file.
 fn resolve_include_path<'a>(
     path: &Path,
     import_roots: &[ImportRoot],
     span: Span,
-) -> Result<PathBuf, ParseError<'a>> {
+) -> Result<SchemaImport, ParseError<'a>> {
     import_roots
         .iter()
-        .find_map(|root| {
-            root.resolve_schema_import(path)
-                .ok()
-                .map(|schema| schema.as_path().to_path_buf())
-        })
+        .find_map(|root| root.resolve_schema_import(path).ok())
         .ok_or_else(|| {
             Rich::custom(
                 span,
@@ -230,7 +214,8 @@ mod tests {
 
         // Then: The resolved path points to the file.
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), file_path.canonicalize().unwrap());
+        let schema = result.unwrap();
+        assert_eq!(schema.as_path(), &file_path.canonicalize().unwrap());
     }
 
     #[test]
@@ -252,7 +237,8 @@ mod tests {
 
         // Then: The resolved path points to the file in the second root.
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), file_path.canonicalize().unwrap());
+        let schema = result.unwrap();
+        assert_eq!(schema.as_path(), &file_path.canonicalize().unwrap());
     }
 
     #[test]
@@ -276,7 +262,8 @@ mod tests {
 
         // Then: The resolved path points to the file in the first root.
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), file1.canonicalize().unwrap());
+        let schema = result.unwrap();
+        assert_eq!(schema.as_path(), &file1.canonicalize().unwrap());
     }
 
     #[test]
@@ -296,7 +283,8 @@ mod tests {
 
         // Then: The resolved path points to the nested file.
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), file_path.canonicalize().unwrap());
+        let schema = result.unwrap();
+        assert_eq!(schema.as_path(), &file_path.canonicalize().unwrap());
     }
 
     #[test]

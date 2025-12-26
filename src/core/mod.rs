@@ -39,7 +39,7 @@ pub struct Module {
     #[builder(default)]
     pub package: Vec<String>,
     #[builder(default)]
-    pub deps: Vec<Descriptor>,
+    pub deps: Vec<SchemaImport>,
     #[builder(default)]
     pub enums: Vec<Descriptor>,
     #[builder(default)]
