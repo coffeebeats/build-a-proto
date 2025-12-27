@@ -24,7 +24,7 @@ pub enum Expr<'src> {
     // Metadata
     Comment(&'src str),
     Include(PathBuf),
-    Package(&'src str),
+    Package(Vec<&'src str>),
 
     // Properties
     Field(Field<'src>),
