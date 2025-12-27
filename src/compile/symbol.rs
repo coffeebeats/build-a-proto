@@ -118,7 +118,7 @@ impl Symbols {
 /// - Types defined in this module
 #[allow(dead_code)]
 pub struct ModuleMetadata {
-    /// Package namespace (e.g., ["game", "entities"])
+    /// Package namespace
     pub package: Vec<String>,
     /// Schema file dependencies (include statements)
     pub deps: Vec<SchemaImport>,
@@ -346,11 +346,11 @@ mod tests {
     fn test_symbols_resolve_relative_multi_part_reference() {
         // Given: A deeply nested type.
         let mut symbols = Symbols::default();
-        let deep = desc(&["game"], &["Outer", "Middle"], "Inner");
+        let deep = desc(&["foo"], &["Outer", "Middle"], "Inner");
         symbols.insert_type(deep.clone(), TypeKind::Message);
 
         // When: Resolving a multi-part reference from package root.
-        let scope = desc(&["game"], &[], "Other");
+        let scope = desc(&["foo"], &[], "Other");
         let result = symbols.find(&scope, "Outer.Middle.Inner");
 
         // Then: The type should be found.
@@ -361,14 +361,14 @@ mod tests {
     fn test_symbols_resolve_relative_imported_package() {
         // Given: Types in different packages.
         let mut symbols = Symbols::default();
-        let bar = desc(&["foo"], &[], "Bar");
-        let baz = desc(&["entities"], &[], "Baz");
+        let bar = desc(&["foo1"], &[], "Bar");
+        let baz = desc(&["foo2"], &[], "Baz");
         symbols.insert_type(bar, TypeKind::Message);
         symbols.insert_type(baz.clone(), TypeKind::Message);
 
         // When: Resolving a cross-package reference.
-        let scope = desc(&["foo"], &[], "Combat");
-        let result = symbols.find(&scope, "entities.Enemy");
+        let scope = desc(&["foo1"], &[], "Other");
+        let result = symbols.find(&scope, "foo2.Baz");
 
         // Then: The imported package type should be found.
         assert_eq!(result, Some((baz, TypeKind::Message)));
