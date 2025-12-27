@@ -45,7 +45,7 @@ impl<'src> Expr<'src> {
         I: ValueInput<'src, Token = Token<'src>, Span = Span>,
         E: ParserExtra<'src, I>,
     {
-        (self, info.span())
+        Spanned::new(self, info.span())
     }
 }
 
@@ -85,24 +85,26 @@ impl<'src> From<Variant<'src>> for Expr<'src> {
 
 #[derive(Builder, Clone, Debug, PartialEq)]
 pub struct Message<'src> {
+    pub span: Span,
     #[builder(default, setter(strip_option))]
     pub comment: Option<Vec<&'src str>>,
+    pub name: Spanned<&'src str>,
     #[builder(default)]
     pub enums: Vec<Enum<'src>>,
     #[builder(default)]
     pub fields: Vec<Field<'src>>,
     #[builder(default)]
     pub messages: Vec<Message<'src>>,
-    pub name: &'src str,
 }
 
 /* ------------------------------ Struct: Enum ------------------------------ */
 
 #[derive(Builder, Clone, Debug, PartialEq)]
 pub struct Enum<'src> {
+    pub span: Span,
     #[builder(default, setter(strip_option))]
     pub comment: Option<Vec<&'src str>>,
-    pub name: &'src str,
+    pub name: Spanned<&'src str>,
     #[builder(default)]
     pub variants: Vec<VariantKind<'src>>,
 }
@@ -111,13 +113,14 @@ pub struct Enum<'src> {
 
 #[derive(Builder, Clone, Debug, PartialEq)]
 pub struct Field<'src> {
+    pub span: Span,
     #[builder(default, setter(strip_option))]
     pub comment: Option<Vec<&'src str>>,
     #[builder(default, setter(strip_option))]
-    pub encoding: Option<Vec<Encoding>>,
+    pub encoding: Option<Spanned<Vec<Encoding>>>,
     #[builder(default, setter(strip_option))]
-    pub index: Option<usize>,
-    pub name: &'src str,
+    pub index: Option<Spanned<usize>>,
+    pub name: Spanned<&'src str>,
     pub typ: Type<'src>,
 }
 
@@ -125,11 +128,12 @@ pub struct Field<'src> {
 
 #[derive(Builder, Clone, Debug, PartialEq)]
 pub struct Variant<'src> {
+    pub span: Span,
     #[builder(setter(strip_option))]
     pub comment: Option<Vec<&'src str>>,
     #[builder(default, setter(strip_option))]
-    pub index: Option<usize>,
-    pub name: &'src str,
+    pub index: Option<Spanned<usize>>,
+    pub name: Spanned<&'src str>,
 }
 
 /* ---------------------------- Enum: VariantKind --------------------------- */
@@ -140,10 +144,20 @@ pub enum VariantKind<'src> {
     Variant(Variant<'src>),
 }
 
-/* ------------------------------- Enum: Type ------------------------------- */
+/* ------------------------------ Struct: Type ------------------------------ */
 
+/// `Type` is a parsed type with its source location.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Type<'src> {
+pub struct Type<'src> {
+    pub kind: TypeKind<'src>,
+    pub span: Span,
+}
+
+/* ----------------------------- Enum: TypeKind ----------------------------- */
+
+/// `TypeKind` is an enumeration of different expression data types.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypeKind<'src> {
     Reference(&'src str),
 
     // Scalars

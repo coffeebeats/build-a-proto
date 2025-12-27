@@ -20,6 +20,7 @@ use super::Span;
 use super::Spanned;
 use super::Token;
 use super::Type;
+use super::TypeKind;
 use super::Variant;
 use super::VariantKind;
 
@@ -59,7 +60,7 @@ pub fn parse<'src>(
         .parse(
             input
                 .as_slice()
-                .map(Span::from(size..size), |(t, s)| (t, s)),
+                .map(Span::from(size..size), |spanned| (&spanned.node, &spanned.span)),
         )
         .into_output_errors()
 }
@@ -134,34 +135,43 @@ where
 
     // Types
 
-    let reference = ident.map(Type::Reference);
+    let reference = ident
+        .map(TypeKind::Reference)
+        .map_with(|kind, e| Type { kind, span: e.span() });
 
     let scalar = select! {
-        Token::Ident("bit") => Type::Bit,
-        Token::Ident("bool") => Type::Bool,
-        Token::Ident("byte") => Type::Byte,
-        Token::Ident("u8") => Type::UnsignedInt8,
-        Token::Ident("u16") => Type::UnsignedInt16,
-        Token::Ident("u32") => Type::UnsignedInt32,
-        Token::Ident("u64") => Type::UnsignedInt64,
-        Token::Ident("i8") => Type::SignedInt8,
-        Token::Ident("i16") => Type::SignedInt16,
-        Token::Ident("i32") => Type::SignedInt32,
-        Token::Ident("i64") => Type::SignedInt64,
-        Token::Ident("f32") => Type::Float32,
-        Token::Ident("f64") => Type::Float64,
-        Token::Ident("string") => Type::String,
-    };
+        Token::Ident("bit") => TypeKind::Bit,
+        Token::Ident("bool") => TypeKind::Bool,
+        Token::Ident("byte") => TypeKind::Byte,
+        Token::Ident("u8") => TypeKind::UnsignedInt8,
+        Token::Ident("u16") => TypeKind::UnsignedInt16,
+        Token::Ident("u32") => TypeKind::UnsignedInt32,
+        Token::Ident("u64") => TypeKind::UnsignedInt64,
+        Token::Ident("i8") => TypeKind::SignedInt8,
+        Token::Ident("i16") => TypeKind::SignedInt16,
+        Token::Ident("i32") => TypeKind::SignedInt32,
+        Token::Ident("i64") => TypeKind::SignedInt64,
+        Token::Ident("f32") => TypeKind::Float32,
+        Token::Ident("f64") => TypeKind::Float64,
+        Token::Ident("string") => TypeKind::String,
+    }
+    .map_with(|kind, e| Type { kind, span: e.span() });
 
     let array = uint
         .or_not()
         .delimited_by(just(Token::ListOpen), just(Token::ListClose))
         .then(scalar)
-        .map(|(size, t)| Type::Array(Box::new(t), size));
+        .map_with(|(size, t), e| Type {
+            kind: TypeKind::Array(Box::new(t), size),
+            span: e.span(),
+        });
     let map = scalar
         .delimited_by(just(Token::ListOpen), just(Token::ListClose))
         .then(scalar)
-        .map(|(k, v)| Type::Map(Box::new(k), Box::new(v)));
+        .map_with(|(k, v), e| Type {
+            kind: TypeKind::Map(Box::new(k), Box::new(v)),
+            span: e.span(),
+        });
 
     let typ = choice((scalar, array, map, reference))
         .labelled("type")
@@ -208,11 +218,12 @@ where
     .boxed();
 
     let variant = (doc_comment.clone().or_not())
-        .then(uint.then_ignore(just(Token::Colon)).or_not())
-        .then(ident)
+        .then(uint.then_ignore(just(Token::Colon)).map_with(|idx, e| Spanned::new(idx, e.span())).or_not())
+        .then(ident.map_with(|name, e| Spanned::new(name, e.span())))
         .then_ignore(just(Token::Semicolon))
-        .map(|((comment, index), name)| {
+        .map_with(|((comment, index), name), e| {
             Expr::Variant(Variant {
+                span: e.span(),
                 comment,
                 index,
                 name,
@@ -222,9 +233,9 @@ where
         .boxed();
 
     let field = (doc_comment.clone().or_not())
-        .then(uint.then_ignore(just(Token::Colon)).or_not())
+        .then(uint.then_ignore(just(Token::Colon)).map_with(|idx, e| Spanned::new(idx, e.span())).or_not())
         .then(typ)
-        .then(ident)
+        .then(ident.map_with(|name, e| Spanned::new(name, e.span())))
         .then(
             just(Token::Equal)
                 .ignore_then(choice((
@@ -240,11 +251,13 @@ where
                             just(Token::ListClose),
                         ),
                 )))
+                .map_with(|enc, e| Spanned::new(enc, e.span()))
                 .or_not(),
         )
         .then_ignore(just(Token::Semicolon))
-        .map(|((((comment, index), typ), name), encoding)| {
+        .map_with(|((((comment, index), typ), name), encoding), e| {
             Expr::Field(Field {
+                span: e.span(),
                 comment,
                 encoding,
                 index,
@@ -258,7 +271,7 @@ where
     let enumeration = doc_comment
         .clone()
         .or_not()
-        .then(just(Token::Keyword(Keyword::Enum)).ignore_then(ident))
+        .then(just(Token::Keyword(Keyword::Enum)).ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))))
         .then_ignore(
             choice((
                 inline_comment.clone(),
@@ -284,6 +297,7 @@ where
             set_field_indices(&mut exprs, info, emitter);
 
             Enum {
+                span: info.span(),
                 comment,
                 name,
                 variants: exprs
@@ -303,7 +317,7 @@ where
     let message = recursive(|msg| {
         doc_comment
             .or_not()
-            .then(just(Token::Keyword(Keyword::Message)).ignore_then(ident))
+            .then(just(Token::Keyword(Keyword::Message)).ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))))
             .then_ignore(
                 choice((
                     inline_comment,
@@ -343,6 +357,7 @@ where
                 }
 
                 Message {
+                    span: info.span(),
                     comment,
                     name,
                     fields,
@@ -443,8 +458,8 @@ fn check_field_names<'src, I, Ex>(
 
     for expr in fields.iter_mut() {
         let target: &'src str = match expr {
-            Expr::Field(f) => f.name,
-            Expr::Variant(v) => v.name,
+            Expr::Field(f) => f.name.node,
+            Expr::Variant(v) => v.name.node,
             _ => continue,
         };
 
@@ -481,15 +496,15 @@ fn set_field_indices<'src, I, Ex>(
         .collect();
 
     for expr in fields.iter_mut() {
-        let target: &mut Option<usize> = match expr {
-            Expr::Field(f) => &mut f.index,
-            Expr::Variant(v) => &mut v.index,
+        let (target, field_span): (&mut Option<Spanned<usize>>, Span) = match expr {
+            Expr::Field(f) => (&mut f.index, f.span),
+            Expr::Variant(v) => (&mut v.index, v.span),
             _ => continue,
         };
 
         match target {
-            Some(index) => {
-                let value = *index;
+            Some(spanned_index) => {
+                let value = spanned_index.node;
 
                 if value >= indices.len() {
                     emitter.emit(Rich::custom(
@@ -516,7 +531,7 @@ fn set_field_indices<'src, I, Ex>(
                 debug_assert!(next_index.is_some());
 
                 if let Some(value) = next_index {
-                    let _ = target.insert(value);
+                    let _ = target.insert(Spanned::new(value, field_span));
                     indices[value] = Some(());
                 }
             }
@@ -582,12 +597,12 @@ mod tests {
 
         // Then: The output expression list matches expectations.
         let exprs = vec![
-            (Expr::Package("abc.def"), Span::from(1..4)),
-            (
+            Spanned::new(Expr::Package("abc.def"), Span::from(1..4)),
+            Spanned::new(
                 Expr::Include(PathBuf::from("a/b/c.baproto")),
                 Span::from(6..9),
             ),
-            (Expr::Include(PathBuf::from("d.baproto")), Span::from(9..12)),
+            Spanned::new(Expr::Include(PathBuf::from("d.baproto")), Span::from(9..12)),
         ];
         assert_eq!(output.output(), Some(&exprs));
     }
@@ -743,14 +758,20 @@ mod tests {
         assert!(!output.has_errors());
 
         // Then: The output expression list matches expectations.
-        let exprs = vec![(
+        use super::TypeKind;
+        let exprs = vec![Spanned::new(
             MessageBuilder::default()
-                .name("Message")
+                .span(Span::from(0..12))
+                .name(Spanned::new("Message", Span::from(1..2)))
                 .fields(vec![
                     FieldBuilder::default()
-                        .name("sequence_id")
-                        .typ(Type::UnsignedInt8)
-                        .index(0)
+                        .span(Span::from(7..10))
+                        .name(Spanned::new("sequence_id", Span::from(8..9)))
+                        .typ(Type {
+                            kind: TypeKind::UnsignedInt8,
+                            span: Span::from(7..8),
+                        })
+                        .index(Spanned::new(0, Span::from(7..10)))
                         .build()
                         .unwrap(),
                 ])
