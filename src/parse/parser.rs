@@ -164,10 +164,25 @@ where
 
     // Types
 
-    let reference = ident.map(TypeKind::Reference).map_with(|kind, e| Type {
-        kind,
-        span: e.span(),
-    });
+    let reference = just(Token::Dot)
+        .or_not()
+        .then(
+            ident
+                // TODO: Add support for segment-specific error-reporting/spans.
+                // .map_with(|id, e| Spanned::new(id, e.span()))
+                .separated_by(just(Token::Dot))
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
+        .map(|(leading_dot, segments)| TypeKind::Reference {
+            absolute: leading_dot.is_some(),
+            name: segments.last().unwrap().to_string(),
+            path: segments.iter().take(segments.len() - 1).copied().collect(),
+        })
+        .map_with(|kind, e| Type {
+            kind,
+            span: e.span(),
+        });
 
     let scalar = select! {
         Token::Ident("bit") => TypeKind::Bit,
@@ -916,5 +931,110 @@ mod tests {
             ),
         ];
         assert_eq!(output.output(), Some(&exprs));
+    }
+
+    #[test]
+    fn test_relative_type_reference_parses_correctly() {
+        // Given: An input with a dot-separated relative type reference.
+        let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::Keyword(Keyword::Message),
+            Token::Ident("Message"),
+            Token::BlockOpen,
+            Token::Newline,
+            Token::Ident("other"),
+            Token::Dot,
+            Token::Ident("package"),
+            Token::Dot,
+            Token::Ident("MyType"),
+            Token::Ident("field_name"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::BlockClose,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has no errors.
+        assert!(
+            !output.has_errors(),
+            "Errors: {:?}",
+            output.errors().collect::<Vec<_>>()
+        );
+
+        let exprs = output.output().unwrap();
+        let Expr::Message(msg) = &exprs[1].node else {
+            panic!("Expected Message");
+        };
+
+        // Then: The field has the correct type reference.
+        let TypeKind::Reference {
+            absolute,
+            path,
+            name,
+        } = &msg.fields[0].typ.kind
+        else {
+            panic!("Expected Reference type");
+        };
+        assert!(!absolute, "Expected relative reference");
+        assert_eq!(name, "MyType");
+        assert_eq!(path, &vec!["other", "package"]);
+    }
+
+    #[test]
+    fn test_absolute_type_reference_parses_correctly() {
+        // Given: An input with a dot-prefixed absolute type reference.
+        let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::Keyword(Keyword::Message),
+            Token::Ident("Message"),
+            Token::BlockOpen,
+            Token::Newline,
+            Token::Dot, // Leading dot for absolute reference
+            Token::Ident("other"),
+            Token::Dot,
+            Token::Ident("package"),
+            Token::Dot,
+            Token::Ident("MyType"),
+            Token::Ident("field_name"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::BlockClose,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has no errors.
+        assert!(
+            !output.has_errors(),
+            "Errors: {:?}",
+            output.errors().collect::<Vec<_>>()
+        );
+
+        let exprs = output.output().unwrap();
+        let Expr::Message(msg) = &exprs[1].node else {
+            panic!("Expected Message");
+        };
+
+        // Then: The field has the correct absolute type reference.
+        let TypeKind::Reference {
+            absolute,
+            path,
+            name,
+        } = &msg.fields[0].typ.kind
+        else {
+            panic!("Expected Reference type");
+        };
+        assert!(absolute, "Expected absolute reference");
+        assert_eq!(path, &vec!["other", "package"]);
+        assert_eq!(name, "MyType");
     }
 }

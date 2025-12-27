@@ -158,7 +158,11 @@ pub struct Type<'src> {
 /// `TypeKind` is an enumeration of different expression data types.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TypeKind<'src> {
-    Reference(&'src str),
+    Reference {
+        absolute: bool,
+        path: Vec<&'src str>,
+        name: String,
+    },
 
     // Scalars
     Bit,
