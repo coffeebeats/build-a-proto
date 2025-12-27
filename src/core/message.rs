@@ -56,9 +56,9 @@ impl<'a> From<crate::parse::Field<'a>> for Field {
                     .map(str::to_owned)
                     .collect(),
             )
-            .encoding(value.encoding)
-            .name(value.name)
-            .index(value.index.unwrap())
+            .encoding(value.encoding.map(|s| s.node))
+            .name(value.name.node)
+            .index(value.index.unwrap().node)
             .typ(Type::from(&value.typ))
             .build()
             .unwrap()
