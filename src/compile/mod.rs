@@ -1,6 +1,7 @@
 mod compiler;
 mod linker;
 mod prepare;
+mod symbol;
 
 /* ------------------------------ Mod: Compiler ----------------------------- */
 
@@ -14,3 +15,8 @@ pub use linker::*;
 /* ------------------------------ Mod: Prepare ------------------------------ */
 
 pub use prepare::*;
+
+/* ------------------------------- Mod: Symbol ------------------------------ */
+
+#[allow(unused_imports)]
+pub use symbol::*;
