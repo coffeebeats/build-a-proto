@@ -8,16 +8,54 @@ use chumsky::text::newline;
 use derive_more::Display;
 use std::num::ParseIntError;
 
+/// `Span` is a type alias for [`chumsky::SimpleSpan`].
+pub type Span = SimpleSpan;
+
 /* -------------------------------------------------------------------------- */
 /*                                Type: Spanned                               */
 /* -------------------------------------------------------------------------- */
 
-/// `Span` is a type alias for [`chumsky::SimpleSpan`].
-pub type Span = SimpleSpan;
+/// `Spanned` wraps a value with its source location span.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Spanned<T> {
+    pub node: T,
+    pub span: Span,
+}
 
-/// `Spanned` is a type alias for a tuple containing a type `T` and a
-/// [`chumsky::SimpleSpan`].
-pub type Spanned<T> = (T, Span);
+/* ---------------------------- Impl: Spanned<T> ---------------------------- */
+
+impl<T> Spanned<T> {
+    pub fn new(node: T, span: Span) -> Self {
+        Self { node, span }
+    }
+}
+
+/* ------------------------------- Impl: Deref ------------------------------ */
+
+impl<T> std::ops::Deref for Spanned<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.node
+    }
+}
+
+/* -------------------------- Impl: From<(T, Span)> ------------------------- */
+
+// Maintain compatibility with lexer implementation which uses a tuple for
+// tracking spanned tokens.
+impl<T> From<(T, Span)> for Spanned<T> {
+    fn from((node, span): (T, Span)) -> Self {
+        Self { node, span }
+    }
+}
+
+/* ------------------------- Impl: From<Spanned<T>> ------------------------- */
+
+impl<T> From<Spanned<T>> for (T, Span) {
+    fn from(spanned: Spanned<T>) -> Self {
+        (spanned.node, spanned.span)
+    }
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                   Fn: Lex                                  */
@@ -185,7 +223,7 @@ impl<'src> Token<'src> {
     where
         E: ParserExtra<'src, &'src str>,
     {
-        (self, info.span())
+        Spanned::new(self, info.span())
     }
 }
 
@@ -242,8 +280,8 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Keyword(Keyword::Package), Span::from(0..7)),
-            (Token::String("abc.def"), Span::from(9..16)),
+            Spanned::new(Token::Keyword(Keyword::Package), Span::from(0..7)),
+            Spanned::new(Token::String("abc.def"), Span::from(9..16)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -261,8 +299,8 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Keyword(Keyword::Include), Span::from(0..7)),
-            (Token::String("foo/bar/baz.baproto"), Span::from(9..28)),
+            Spanned::new(Token::Keyword(Keyword::Include), Span::from(0..7)),
+            Spanned::new(Token::String("foo/bar/baz.baproto"), Span::from(9..28)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -279,7 +317,7 @@ mod tests {
         assert!(!output.has_errors());
 
         // Then: The output token list matches expectations.
-        let tokens = vec![(
+        let tokens = vec![Spanned::new(
             Token::Comment("comment // that includes a comment"),
             Span::from(3..37),
         )];
@@ -299,11 +337,11 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Keyword(Keyword::Enum), Span::from(0..4)),
-            (Token::Ident("SomeEnum"), Span::from(5..13)),
-            (Token::BlockOpen, Span::from(14..15)),
-            (Token::Newline, Span::from(16..17)),
-            (Token::BlockClose, Span::from(18..19)),
+            Spanned::new(Token::Keyword(Keyword::Enum), Span::from(0..4)),
+            Spanned::new(Token::Ident("SomeEnum"), Span::from(5..13)),
+            Spanned::new(Token::BlockOpen, Span::from(14..15)),
+            Spanned::new(Token::Newline, Span::from(16..17)),
+            Spanned::new(Token::BlockClose, Span::from(18..19)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -321,11 +359,11 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Keyword(Keyword::Message), Span::from(0..7)),
-            (Token::Ident("SomeMessage"), Span::from(8..19)),
-            (Token::BlockOpen, Span::from(20..21)),
-            (Token::Newline, Span::from(22..23)),
-            (Token::BlockClose, Span::from(24..25)),
+            Spanned::new(Token::Keyword(Keyword::Message), Span::from(0..7)),
+            Spanned::new(Token::Ident("SomeMessage"), Span::from(8..19)),
+            Spanned::new(Token::BlockOpen, Span::from(20..21)),
+            Spanned::new(Token::Newline, Span::from(22..23)),
+            Spanned::new(Token::BlockClose, Span::from(24..25)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -343,8 +381,8 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Ident("VARIANT_1"), Span::from(0..9)),
-            (Token::Semicolon, Span::from(9..10)),
+            Spanned::new(Token::Ident("VARIANT_1"), Span::from(0..9)),
+            Spanned::new(Token::Semicolon, Span::from(9..10)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -362,10 +400,10 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Uint(0), Span::from(0..1)),
-            (Token::Colon, Span::from(1..2)),
-            (Token::Ident("VARIANT_1"), Span::from(3..12)),
-            (Token::Semicolon, Span::from(12..13)),
+            Spanned::new(Token::Uint(0), Span::from(0..1)),
+            Spanned::new(Token::Colon, Span::from(1..2)),
+            Spanned::new(Token::Ident("VARIANT_1"), Span::from(3..12)),
+            Spanned::new(Token::Semicolon, Span::from(12..13)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -383,12 +421,12 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::ListOpen, Span::from(0..1)),
-            (Token::Ident("key"), Span::from(1..4)),
-            (Token::ListClose, Span::from(4..5)),
-            (Token::Ident("value"), Span::from(5..10)),
-            (Token::Ident("array_field"), Span::from(11..22)),
-            (Token::Semicolon, Span::from(22..23)),
+            Spanned::new(Token::ListOpen, Span::from(0..1)),
+            Spanned::new(Token::Ident("key"), Span::from(1..4)),
+            Spanned::new(Token::ListClose, Span::from(4..5)),
+            Spanned::new(Token::Ident("value"), Span::from(5..10)),
+            Spanned::new(Token::Ident("array_field"), Span::from(11..22)),
+            Spanned::new(Token::Semicolon, Span::from(22..23)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -406,14 +444,14 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Uint(1), Span::from(0..1)),
-            (Token::Colon, Span::from(1..2)),
-            (Token::ListOpen, Span::from(3..4)),
-            (Token::Ident("key"), Span::from(4..7)),
-            (Token::ListClose, Span::from(7..8)),
-            (Token::Ident("value"), Span::from(8..13)),
-            (Token::Ident("array_field"), Span::from(14..25)),
-            (Token::Semicolon, Span::from(25..26)),
+            Spanned::new(Token::Uint(1), Span::from(0..1)),
+            Spanned::new(Token::Colon, Span::from(1..2)),
+            Spanned::new(Token::ListOpen, Span::from(3..4)),
+            Spanned::new(Token::Ident("key"), Span::from(4..7)),
+            Spanned::new(Token::ListClose, Span::from(7..8)),
+            Spanned::new(Token::Ident("value"), Span::from(8..13)),
+            Spanned::new(Token::Ident("array_field"), Span::from(14..25)),
+            Spanned::new(Token::Semicolon, Span::from(25..26)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -431,21 +469,21 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            (Token::Ident("u8"), Span::from(0..2)),
-            (Token::Ident("array_field"), Span::from(3..14)),
-            (Token::Equal, Span::from(15..16)),
-            (Token::ListOpen, Span::from(17..18)),
-            (Token::Ident("delta"), Span::from(18..23)),
-            (Token::Comma, Span::from(23..24)),
-            (Token::Ident("bits"), Span::from(25..29)),
-            (Token::FnOpen, Span::from(29..30)),
-            (Token::Ident("var"), Span::from(30..33)),
-            (Token::FnOpen, Span::from(33..34)),
-            (Token::Uint(8), Span::from(34..35)),
-            (Token::FnClose, Span::from(35..36)),
-            (Token::FnClose, Span::from(36..37)),
-            (Token::ListClose, Span::from(37..38)),
-            (Token::Semicolon, Span::from(38..39)),
+            Spanned::new(Token::Ident("u8"), Span::from(0..2)),
+            Spanned::new(Token::Ident("array_field"), Span::from(3..14)),
+            Spanned::new(Token::Equal, Span::from(15..16)),
+            Spanned::new(Token::ListOpen, Span::from(17..18)),
+            Spanned::new(Token::Ident("delta"), Span::from(18..23)),
+            Spanned::new(Token::Comma, Span::from(23..24)),
+            Spanned::new(Token::Ident("bits"), Span::from(25..29)),
+            Spanned::new(Token::FnOpen, Span::from(29..30)),
+            Spanned::new(Token::Ident("var"), Span::from(30..33)),
+            Spanned::new(Token::FnOpen, Span::from(33..34)),
+            Spanned::new(Token::Uint(8), Span::from(34..35)),
+            Spanned::new(Token::FnClose, Span::from(35..36)),
+            Spanned::new(Token::FnClose, Span::from(36..37)),
+            Spanned::new(Token::ListClose, Span::from(37..38)),
+            Spanned::new(Token::Semicolon, Span::from(38..39)),
         ];
         assert_eq!(output.output(), Some(&tokens));
     }

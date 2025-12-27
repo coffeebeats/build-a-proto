@@ -50,7 +50,7 @@ impl<'a> From<crate::parse::Variant<'a>> for Variant {
                     .map(str::to_owned)
                     .collect(),
             )
-            .name(value.name)
+            .name(value.name.node)
             .build()
             .unwrap()
     }

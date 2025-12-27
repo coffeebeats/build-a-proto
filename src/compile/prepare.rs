@@ -23,7 +23,7 @@ pub fn prepare<'a>(
     schema_import: &'a SchemaImport,
     import_roots: &[ImportRoot],
     registry: &'a mut Registry,
-    exprs: Vec<(Expr<'a>, Span)>,
+    exprs: Vec<crate::parse::Spanned<Expr<'a>>>,
 ) -> Result<(), ParseError<'a>> {
     let mut enums: Vec<crate::parse::Enum> = vec![];
     let mut messages: Vec<crate::parse::Message> = vec![];
@@ -31,8 +31,8 @@ pub fn prepare<'a>(
     let mut module = crate::core::Module::new(schema_import.as_path().to_path_buf());
 
     // First, inspect all expressions so all definitions can be registered.
-    for (expr, span) in exprs {
-        match expr {
+    for spanned_expr in exprs {
+        match spanned_expr.node {
             Expr::Comment(_) => {} // Skip
             Expr::Enum(enm) => enums.push(enm),
             Expr::Message(msg) => messages.push(msg),
@@ -41,9 +41,11 @@ pub fn prepare<'a>(
                 module.package = pkg.split(".").map(str::to_owned).collect();
             }
             Expr::Include(include) => {
-                module
-                    .deps
-                    .push(resolve_include_path(&include, import_roots, span)?);
+                module.deps.push(resolve_include_path(
+                    &include,
+                    import_roots,
+                    spanned_expr.span,
+                )?);
             }
             _ => unreachable!(),
         }
@@ -60,12 +62,16 @@ pub fn prepare<'a>(
 
         enm.variants.sort_by(|l, r| {
             let l = match l {
-                crate::parse::VariantKind::Field(field) => field.index,
-                crate::parse::VariantKind::Variant(variant) => variant.index,
+                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
+                crate::parse::VariantKind::Variant(variant) => {
+                    variant.index.as_ref().map(|s| s.node)
+                }
             };
             let r = match r {
-                crate::parse::VariantKind::Field(field) => field.index,
-                crate::parse::VariantKind::Variant(variant) => variant.index,
+                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
+                crate::parse::VariantKind::Variant(variant) => {
+                    variant.index.as_ref().map(|s| s.node)
+                }
             };
 
             l.cmp(&r)
@@ -74,7 +80,7 @@ pub fn prepare<'a>(
         let d = DescriptorBuilder::default()
             .package(scope.package)
             .path(scope.path)
-            .name(enm.name.to_owned())
+            .name(enm.name.node.to_owned())
             .build()
             .unwrap();
 
@@ -86,7 +92,7 @@ pub fn prepare<'a>(
                     .map(str::to_owned)
                     .collect(),
             )
-            .name(enm.name)
+            .name(enm.name.node)
             .variants(enm.variants.into_iter().map(VariantKind::from).collect())
             .build()
             .unwrap();
@@ -103,12 +109,17 @@ pub fn prepare<'a>(
     ) -> Descriptor {
         debug_assert!(scope.name.is_none());
 
-        msg.fields.sort_by(|l, r| l.index.cmp(&r.index));
+        msg.fields.sort_by(|l, r| {
+            l.index
+                .as_ref()
+                .map(|s| s.node)
+                .cmp(&r.index.as_ref().map(|s| s.node))
+        });
 
         let d = DescriptorBuilder::default()
             .package(scope.package.clone())
             .path(scope.path.clone())
-            .name(msg.name.to_owned())
+            .name(msg.name.node.to_owned())
             .build()
             .unwrap();
 
@@ -120,13 +131,13 @@ pub fn prepare<'a>(
                     .map(str::to_owned)
                     .collect(),
             )
-            .name(msg.name)
+            .name(msg.name.node)
             .fields(msg.fields.into_iter().map(Field::from).collect())
             .build()
             .unwrap();
 
         let mut scope = scope.clone();
-        scope.path.push(msg.name.to_owned());
+        scope.path.push(msg.name.node.to_owned());
 
         m.enums = msg
             .enums
