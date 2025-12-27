@@ -57,11 +57,9 @@ pub fn parse<'src>(
     size: usize,
 ) -> (Option<Vec<Spanned<Expr<'src>>>>, Vec<ParseError<'src>>) {
     parser()
-        .parse(
-            input
-                .as_slice()
-                .map(Span::from(size..size), |spanned| (&spanned.node, &spanned.span)),
-        )
+        .parse(input.as_slice().map(Span::from(size..size), |spanned| {
+            (&spanned.node, &spanned.span)
+        }))
         .into_output_errors()
 }
 
@@ -135,9 +133,10 @@ where
 
     // Types
 
-    let reference = ident
-        .map(TypeKind::Reference)
-        .map_with(|kind, e| Type { kind, span: e.span() });
+    let reference = ident.map(TypeKind::Reference).map_with(|kind, e| Type {
+        kind,
+        span: e.span(),
+    });
 
     let scalar = select! {
         Token::Ident("bit") => TypeKind::Bit,
@@ -155,7 +154,10 @@ where
         Token::Ident("f64") => TypeKind::Float64,
         Token::Ident("string") => TypeKind::String,
     }
-    .map_with(|kind, e| Type { kind, span: e.span() });
+    .map_with(|kind, e| Type {
+        kind,
+        span: e.span(),
+    });
 
     let array = uint
         .or_not()
@@ -218,7 +220,11 @@ where
     .boxed();
 
     let variant = (doc_comment.clone().or_not())
-        .then(uint.then_ignore(just(Token::Colon)).map_with(|idx, e| Spanned::new(idx, e.span())).or_not())
+        .then(
+            uint.then_ignore(just(Token::Colon))
+                .map_with(|idx, e| Spanned::new(idx, e.span()))
+                .or_not(),
+        )
         .then(ident.map_with(|name, e| Spanned::new(name, e.span())))
         .then_ignore(just(Token::Semicolon))
         .map_with(|((comment, index), name), e| {
@@ -233,7 +239,11 @@ where
         .boxed();
 
     let field = (doc_comment.clone().or_not())
-        .then(uint.then_ignore(just(Token::Colon)).map_with(|idx, e| Spanned::new(idx, e.span())).or_not())
+        .then(
+            uint.then_ignore(just(Token::Colon))
+                .map_with(|idx, e| Spanned::new(idx, e.span()))
+                .or_not(),
+        )
         .then(typ)
         .then(ident.map_with(|name, e| Spanned::new(name, e.span())))
         .then(
@@ -271,7 +281,10 @@ where
     let enumeration = doc_comment
         .clone()
         .or_not()
-        .then(just(Token::Keyword(Keyword::Enum)).ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))))
+        .then(
+            just(Token::Keyword(Keyword::Enum))
+                .ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))),
+        )
         .then_ignore(
             choice((
                 inline_comment.clone(),
@@ -317,7 +330,10 @@ where
     let message = recursive(|msg| {
         doc_comment
             .or_not()
-            .then(just(Token::Keyword(Keyword::Message)).ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))))
+            .then(
+                just(Token::Keyword(Keyword::Message))
+                    .ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))),
+            )
             .then_ignore(
                 choice((
                     inline_comment,

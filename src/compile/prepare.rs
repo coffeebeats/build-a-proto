@@ -41,9 +41,11 @@ pub fn prepare<'a>(
                 module.package = pkg.split(".").map(str::to_owned).collect();
             }
             Expr::Include(include) => {
-                module
-                    .deps
-                    .push(resolve_include_path(&include, import_roots, spanned_expr.span)?);
+                module.deps.push(resolve_include_path(
+                    &include,
+                    import_roots,
+                    spanned_expr.span,
+                )?);
             }
             _ => unreachable!(),
         }
@@ -61,11 +63,15 @@ pub fn prepare<'a>(
         enm.variants.sort_by(|l, r| {
             let l = match l {
                 crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
-                crate::parse::VariantKind::Variant(variant) => variant.index.as_ref().map(|s| s.node),
+                crate::parse::VariantKind::Variant(variant) => {
+                    variant.index.as_ref().map(|s| s.node)
+                }
             };
             let r = match r {
                 crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
-                crate::parse::VariantKind::Variant(variant) => variant.index.as_ref().map(|s| s.node),
+                crate::parse::VariantKind::Variant(variant) => {
+                    variant.index.as_ref().map(|s| s.node)
+                }
             };
 
             l.cmp(&r)
@@ -104,7 +110,10 @@ pub fn prepare<'a>(
         debug_assert!(scope.name.is_none());
 
         msg.fields.sort_by(|l, r| {
-            l.index.as_ref().map(|s| s.node).cmp(&r.index.as_ref().map(|s| s.node))
+            l.index
+                .as_ref()
+                .map(|s| s.node)
+                .cmp(&r.index.as_ref().map(|s| s.node))
         });
 
         let d = DescriptorBuilder::default()
