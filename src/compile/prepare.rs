@@ -7,6 +7,8 @@ use crate::core::EnumBuilder;
 use crate::core::Field;
 use crate::core::ImportRoot;
 use crate::core::MessageBuilder;
+use crate::core::Module;
+use crate::core::PackageName;
 use crate::core::Registry;
 use crate::core::SchemaImport;
 use crate::core::VariantKind;
@@ -28,7 +30,7 @@ pub fn prepare<'a>(
     let mut enums: Vec<crate::parse::Enum> = vec![];
     let mut messages: Vec<crate::parse::Message> = vec![];
 
-    let mut module = crate::core::Module::new(schema_import.as_path().to_path_buf());
+    let mut module = Module::new(schema_import.as_path().to_path_buf());
 
     // First, inspect all expressions so all definitions can be registered.
     for spanned_expr in exprs {
@@ -36,9 +38,9 @@ pub fn prepare<'a>(
             Expr::Comment(_) => {} // Skip
             Expr::Enum(enm) => enums.push(enm),
             Expr::Message(msg) => messages.push(msg),
-            Expr::Package(pkg) => {
-                // FIXME: This should happen during parsing.
-                module.package = pkg.split(".").map(str::to_owned).collect();
+            Expr::Package(segments) => {
+                module.package =
+                    PackageName::try_from(segments.into_iter().collect::<Vec<_>>()).unwrap();
             }
             Expr::Include(include) => {
                 module.deps.push(resolve_include_path(

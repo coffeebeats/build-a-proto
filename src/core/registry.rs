@@ -6,6 +6,7 @@ use std::path::Path;
 use super::Enum;
 use super::Message;
 use super::Module;
+use super::PackageName;
 
 /* -------------------------------------------------------------------------- */
 /*                              Struct: Registry                              */
@@ -115,8 +116,7 @@ impl Registry {
 #[derive(Builder, Clone, Debug, Display, PartialEq, Eq, Hash)]
 #[display("{}", String::from(self))]
 pub struct Descriptor {
-    #[builder(default)]
-    pub package: Vec<String>,
+    pub package: PackageName,
     #[builder(default)]
     pub path: Vec<String>,
     #[builder(default, setter(into, strip_option))]
@@ -128,7 +128,7 @@ pub struct Descriptor {
 impl From<&Descriptor> for String {
     fn from(value: &Descriptor) -> Self {
         let name = value.name.as_deref().unwrap_or("");
-        let pkg = value.package.join(".");
+        let pkg = value.package.to_string();
         let path = if !value.path.is_empty() {
             value.path.join(".")
         } else {
