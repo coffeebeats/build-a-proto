@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::core::{Descriptor, SchemaImport};
+use crate::core::Descriptor;
+use crate::core::Reference;
+use crate::core::SchemaImport;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Symbols                              */
@@ -48,9 +50,13 @@ impl Symbols {
 
     /// `find` resolves a reference to a registered type, if one exists.
     #[allow(dead_code)]
-    pub fn find(&self, scope: &Descriptor, reference: &str) -> Option<(Descriptor, TypeKind)> {
-        if let Some(reference_abs) = reference.strip_prefix('.') {
-            return self.resolve_absolute(reference_abs);
+    pub fn find(
+        &self,
+        scope: &Descriptor,
+        reference: &Reference,
+    ) -> Option<(Descriptor, TypeKind)> {
+        if reference.is_absolute() {
+            return self.resolve_absolute(reference);
         }
 
         self.resolve_relative(scope, reference)
@@ -58,8 +64,10 @@ impl Symbols {
 
     /// `resolve_absolute` resolves an absolute reference (a reference beginning
     /// with a `.`).
-    fn resolve_absolute(&self, reference: &str) -> Option<(Descriptor, TypeKind)> {
-        let descriptor = self.descriptors.get(reference)?;
+    fn resolve_absolute(&self, reference: &Reference) -> Option<(Descriptor, TypeKind)> {
+        let key = reference.to_string().strip_prefix('.').unwrap().to_string();
+
+        let descriptor = self.descriptors.get(&key)?;
         let kind = self.types.get(descriptor)?;
         Some((descriptor.clone(), *kind))
     }
@@ -69,12 +77,8 @@ impl Symbols {
     fn resolve_relative(
         &self,
         scope: &Descriptor,
-        reference: &str,
+        reference: &Reference,
     ) -> Option<(Descriptor, TypeKind)> {
-        if reference.is_empty() {
-            return None;
-        }
-
         let scope_name = String::from(scope);
         debug_assert!(!scope_name.is_empty());
 
@@ -149,6 +153,7 @@ pub enum TypeKind {
 mod tests {
     use super::*;
     use crate::core::DescriptorBuilder;
+    use crate::core::PackageName;
 
     #[test]
     fn test_symbols_contains() {
@@ -196,19 +201,6 @@ mod tests {
         assert_eq!(symbols.get_type(&variant), Some(TypeKind::Variant));
     }
 
-    #[test]
-    fn test_symbols_resolve_empty_reference() {
-        // Given: A symbol table.
-        let symbols = Symbols::default();
-        let scope = desc(&["foo"], &[], "Bar");
-
-        // When: Attempting to resolve an empty reference.
-        let result = symbols.find(&scope, "");
-
-        // Then: Resolution should fail.
-        assert_eq!(result, None);
-    }
-
     /* --------------------- Tests: Absolute references --------------------- */
 
     #[test]
@@ -220,7 +212,7 @@ mod tests {
 
         // When: Resolving an absolute reference.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".foo.Bar");
+        let result = symbols.find(&scope, &type_ref_abs(&["foo"], "Bar"));
 
         // Then: The type should be resolved correctly.
         assert_eq!(result, Some((descriptor, TypeKind::Message)));
@@ -235,7 +227,7 @@ mod tests {
 
         // When: Resolving an absolute reference.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".foo.Outer.Inner");
+        let result = symbols.find(&scope, &type_ref_abs(&["foo", "Outer"], "Inner"));
 
         // Then: The nested type should be resolved.
         assert_eq!(result, Some((inner, TypeKind::Message)));
@@ -250,7 +242,7 @@ mod tests {
 
         // When: Resolving an absolute reference.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".foo.bar.Baz");
+        let result = symbols.find(&scope, &type_ref_abs(&["foo", "bar"], "Baz"));
 
         // Then: The type should be resolved.
         assert_eq!(result, Some((descriptor, TypeKind::Message)));
@@ -264,7 +256,7 @@ mod tests {
 
         // When: Resolving a reference to an unknown type.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".foo.Unknown");
+        let result = symbols.find(&scope, &type_ref_abs(&["foo"], "Unknown"));
 
         // Then: Resolution should fail.
         assert_eq!(result, None);
@@ -283,7 +275,7 @@ mod tests {
 
         // When: Resolving a sibling reference from Bar's scope.
         let scope = desc(&["foo"], &[], "Other");
-        let result = symbols.find(&scope, "Baz");
+        let result = symbols.find(&scope, &type_ref(&[], "Baz"));
 
         // Then: The sibling type should be found.
         assert_eq!(result, Some((baz, TypeKind::Message)));
@@ -300,7 +292,7 @@ mod tests {
 
         // When: Resolving a child reference from the parent.
         let scope = desc(&["foo"], &[], "Outer");
-        let result = symbols.find(&scope, "Inner");
+        let result = symbols.find(&scope, &type_ref(&[], "Inner"));
 
         // Then: The child should be found.
         assert_eq!(result, Some((inner, TypeKind::Message)));
@@ -319,7 +311,7 @@ mod tests {
 
         // When: Resolving from inner scope to outer scope sibling.
         let scope = desc(&["foo"], &["Outer"], "Inner");
-        let result = symbols.find(&scope, "Sibling");
+        let result = symbols.find(&scope, &type_ref(&[], "Sibling"));
 
         // Then: The type should be found in parent scope.
         assert_eq!(result, Some((sibling, TypeKind::Message)));
@@ -336,7 +328,7 @@ mod tests {
 
         // When: Resolving from within Outer.
         let scope = desc(&["foo"], &["Outer"], "Inner");
-        let result = symbols.find(&scope, "Config");
+        let result = symbols.find(&scope, &type_ref(&[], "Config"));
 
         // Then: The nested type should shadow the package-level type.
         assert_eq!(result, Some((nested, TypeKind::Message)));
@@ -351,7 +343,7 @@ mod tests {
 
         // When: Resolving a multi-part reference from package root.
         let scope = desc(&["foo"], &[], "Other");
-        let result = symbols.find(&scope, "Outer.Middle.Inner");
+        let result = symbols.find(&scope, &type_ref(&["Outer", "Middle"], "Inner"));
 
         // Then: The type should be found.
         assert_eq!(result, Some((deep, TypeKind::Message)));
@@ -368,7 +360,7 @@ mod tests {
 
         // When: Resolving a cross-package reference.
         let scope = desc(&["foo1"], &[], "Other");
-        let result = symbols.find(&scope, "foo2.Baz");
+        let result = symbols.find(&scope, &type_ref(&["foo2"], "Baz"));
 
         // Then: The imported package type should be found.
         assert_eq!(result, Some((baz, TypeKind::Message)));
@@ -382,7 +374,7 @@ mod tests {
 
         // When: Resolving a reference to an unknown type.
         let scope = desc(&["food"], &[], "Bar");
-        let result = symbols.find(&scope, "Unknown");
+        let result = symbols.find(&scope, &type_ref(&[], "Unknown"));
 
         // Then: Resolution should fail.
         assert_eq!(result, None);
@@ -397,7 +389,7 @@ mod tests {
 
         // When: Resolving from a deeply nested scope.
         let scope = desc(&["foo"], &["A", "B", "C", "D"], "Deep");
-        let result = symbols.find(&scope, "Target");
+        let result = symbols.find(&scope, &type_ref(&[], "Target"));
 
         // Then: The type should still be found (walks up to package root).
         assert_eq!(result, Some((target, TypeKind::Message)));
@@ -407,10 +399,22 @@ mod tests {
 
     fn desc(package: &[&str], path: &[&str], name: &str) -> Descriptor {
         DescriptorBuilder::default()
-            .package(package.iter().map(|s| s.to_string()).collect())
+            .package(PackageName::try_from(package.iter().copied().collect::<Vec<_>>()).unwrap())
             .path(path.iter().map(|s| s.to_string()).collect())
             .name(name.to_string())
             .build()
             .unwrap()
+    }
+
+    /* ---------------------------- Fn: type_ref ---------------------------- */
+
+    fn type_ref(path: &[&str], name: &str) -> Reference {
+        Reference::new_relative(path.iter().map(|&s| s.to_owned()).collect(), name)
+    }
+
+    /* -------------------------- Fn: type_ref_abs -------------------------- */
+
+    fn type_ref_abs(path: &[&str], name: &str) -> Reference {
+        Reference::new_absolute(path.iter().map(|&s| s.to_owned()).collect(), name)
     }
 }
