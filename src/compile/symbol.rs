@@ -9,6 +9,7 @@ use crate::core::{Descriptor, SchemaImport};
 /// `Symbols` is a symbol table tracking type existence and module metadata
 /// during compilation.
 #[allow(dead_code)]
+#[derive(Default)]
 pub struct Symbols {
     descriptors: HashMap<String, Descriptor>,
     modules: HashMap<SchemaImport, ModuleMetadata>,
@@ -18,15 +19,6 @@ pub struct Symbols {
 /* ----------------------------- Impl: Symbols ------------------------------ */
 
 impl Symbols {
-    /// `new` creates a new, empty symbol table.
-    pub fn new() -> Self {
-        Self {
-            types: HashMap::new(),
-            descriptors: HashMap::new(),
-            modules: HashMap::new(),
-        }
-    }
-
     /// `contains` checks if a type descriptor exists in the symbol table.
     #[allow(dead_code)]
     pub fn contains(&self, desc: &Descriptor) -> bool {
@@ -121,14 +113,6 @@ impl Symbols {
     }
 }
 
-/* ---------------------------- Impl: Default ----------------------------- */
-
-impl Default for Symbols {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /* -------------------------------------------------------------------------- */
 /*                          Struct: ModuleMetadata                            */
 /* -------------------------------------------------------------------------- */
@@ -176,7 +160,7 @@ mod tests {
     #[test]
     fn test_symbols_new_is_empty() {
         // Given: A new symbol table
-        let symbols = Symbols::new();
+        let symbols = Symbols::default();
 
         // When: Checking for any descriptor
         let descriptor = desc(&["pkg"], &[], "Type");
@@ -189,7 +173,7 @@ mod tests {
     #[test]
     fn test_symbols_insert_and_contains() {
         // Given: A symbol table
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let descriptor = desc(&["pkg"], &[], "Message");
 
         // When: Inserting a type
@@ -203,7 +187,7 @@ mod tests {
     #[test]
     fn test_symbols_type_kinds() {
         // Given: A symbol table with both message and enum.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let message = desc(&["pkg"], &[], "Message");
         let variant = desc(&["pkg"], &[], "Variant");
 
@@ -221,7 +205,7 @@ mod tests {
     #[test]
     fn test_resolve_absolute_package_level_type() {
         // Given: A symbol table with a package-level type.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let player = desc(&["game"], &[], "Player");
         symbols.insert_type(player.clone(), TypeKind::Message);
 
@@ -236,7 +220,7 @@ mod tests {
     #[test]
     fn test_resolve_absolute_nested_type() {
         // Given: A symbol table with a nested type.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let inner = desc(&["game"], &["Outer"], "Inner");
         symbols.insert_type(inner.clone(), TypeKind::Message);
 
@@ -251,7 +235,7 @@ mod tests {
     #[test]
     fn test_resolve_absolute_multi_part_package() {
         // Given: A symbol table with a multi-part package.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let entity = desc(&["game", "entities"], &[], "Player");
         symbols.insert_type(entity.clone(), TypeKind::Message);
 
@@ -266,7 +250,7 @@ mod tests {
     #[test]
     fn test_resolve_absolute_unknown_type() {
         // Given: A symbol table with some types.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         symbols.insert_type(desc(&["game"], &[], "Player"), TypeKind::Message);
 
         // When: Resolving a reference to an unknown type.
@@ -282,7 +266,7 @@ mod tests {
     #[test]
     fn test_resolve_relative_sibling_type() {
         // Given: Two types in the same package.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let player = desc(&["game"], &[], "Player");
         let enemy = desc(&["game"], &[], "Enemy");
         symbols.insert_type(player, TypeKind::Message);
@@ -299,7 +283,7 @@ mod tests {
     #[test]
     fn test_resolve_relative_nested_child() {
         // Given: A parent message with a nested child
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let outer = desc(&["game"], &[], "Outer");
         let inner = desc(&["game"], &["Outer"], "Inner");
         symbols.insert_type(outer, TypeKind::Message);
@@ -316,7 +300,7 @@ mod tests {
     #[test]
     fn test_resolve_relative_parent_scope() {
         // Given: Nested messages where an inner references an outer sibling.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let outer = desc(&["game"], &[], "Outer");
         let sibling = desc(&["game"], &[], "Sibling");
         let inner = desc(&["game"], &["Outer"], "Inner");
@@ -335,7 +319,7 @@ mod tests {
     #[test]
     fn test_resolve_relative_shadowing() {
         // Given: A type name exists at both nested and package level.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let package_level = desc(&["game"], &[], "Config");
         let nested = desc(&["game"], &["Outer"], "Config");
         symbols.insert_type(package_level, TypeKind::Message);
@@ -352,7 +336,7 @@ mod tests {
     #[test]
     fn test_resolve_relative_multi_part_reference() {
         // Given: A deeply nested type.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let deep = desc(&["game"], &["Outer", "Middle"], "Inner");
         symbols.insert_type(deep.clone(), TypeKind::Message);
 
@@ -367,7 +351,7 @@ mod tests {
     #[test]
     fn test_resolve_relative_imported_package() {
         // Given: Types in different packages.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let player = desc(&["game"], &[], "Player");
         let enemy = desc(&["entities"], &[], "Enemy");
         symbols.insert_type(player, TypeKind::Message);
@@ -384,7 +368,7 @@ mod tests {
     #[test]
     fn test_resolve_relative_unknown_type() {
         // Given: A symbol table with some types.
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         symbols.insert_type(desc(&["game"], &[], "Player"), TypeKind::Message);
 
         // When: Resolving a reference to an unknown type.
@@ -400,7 +384,7 @@ mod tests {
     #[test]
     fn test_resolve_empty_reference() {
         // Given: A symbol table
-        let symbols = Symbols::new();
+        let symbols = Symbols::default();
         let scope = desc(&["game"], &[], "Player");
 
         // When: Attempting to resolve an empty reference
@@ -413,7 +397,7 @@ mod tests {
     #[test]
     fn test_resolve_deeply_nested_scope() {
         // Given: A type at package level
-        let mut symbols = Symbols::new();
+        let mut symbols = Symbols::default();
         let target = desc(&["game"], &[], "Target");
         symbols.insert_type(target.clone(), TypeKind::Message);
 
