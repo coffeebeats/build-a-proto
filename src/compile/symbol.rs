@@ -47,13 +47,6 @@ impl Symbols {
     }
 
     /// `find` resolves a reference to a registered type, if one exists.
-    ///
-    /// Resolution order:
-    ///     1. If `name` starts with `.`, look up exactly (absolute).
-    ///     2. Current scope (innermost message)
-    ///     3. Parent scopes (outer messages)
-    ///     4. Package root
-    ///     5. Imported packages (root-level lookup)
     #[allow(dead_code)]
     pub fn find(&self, scope: &Descriptor, reference: &str) -> Option<(Descriptor, TypeKind)> {
         if let Some(reference_abs) = reference.strip_prefix('.') {
