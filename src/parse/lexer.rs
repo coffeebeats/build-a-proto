@@ -79,6 +79,7 @@ fn lexer<'src>()
 
     let control = choice((
         just(',').map(|_| Token::Comma),
+        just('.').map(|_| Token::Dot),
         just(';').map(|_| Token::Semicolon),
         just(':').map(|_| Token::Colon),
         just('(').map(|_| Token::FnOpen),
@@ -156,8 +157,6 @@ fn lexer<'src>()
     );
 
     let identifier = ident()
-        .separated_by(just('.'))
-        .at_least(1)
         .to_slice()
         .map(Token::Ident)
         .map_with(Token::with_span);
@@ -196,6 +195,7 @@ pub enum Token<'src> {
     BlockOpen,
     Colon,
     Comma,
+    Dot,
     Equal,
     FnClose,
     FnOpen,
