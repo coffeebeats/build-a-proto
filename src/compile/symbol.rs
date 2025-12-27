@@ -151,35 +151,38 @@ mod tests {
     use crate::core::DescriptorBuilder;
 
     #[test]
-    fn test_symbols_new_is_empty() {
-        // Given: A new symbol table.
-        let symbols = Symbols::default();
+    fn test_symbols_contains() {
+        // Given: A symbol table.
+        let mut symbols = Symbols::default();
 
-        // When: Checking for any descriptor.
-        let descriptor = desc(&["pkg"], &[], "Type");
+        // Given: A test descriptor.
+        let descriptor = desc(&["pkg"], &[], "Message");
 
-        // Then: The symbol table should not contain it.
-        assert!(!symbols.contains(&descriptor));
-        assert_eq!(symbols.get_type(&descriptor), None);
+        // When: Inserting a type for that descriptor.
+        symbols.insert_type(descriptor.clone(), TypeKind::Message);
+
+        // Then: The type should exist.
+        assert!(symbols.contains(&descriptor));
     }
 
     #[test]
-    fn test_symbols_insert_and_contains() {
+    fn test_symbols_insert() {
         // Given: A symbol table.
         let mut symbols = Symbols::default();
+
+        // Given: A test descriptor.
         let descriptor = desc(&["pkg"], &[], "Message");
 
-        // When: Inserting a type.
+        // When: Inserting a type for that descriptor.
         symbols.insert_type(descriptor.clone(), TypeKind::Message);
 
         // Then: The type should be found.
-        assert!(symbols.contains(&descriptor));
         assert_eq!(symbols.get_type(&descriptor), Some(TypeKind::Message));
     }
 
     #[test]
-    fn test_symbols_type_kinds() {
-        // Given: A symbol table with both message and enum.
+    fn test_symbols_get_type() {
+        // Given: A symbol table with both message and variant.
         let mut symbols = Symbols::default();
         let message = desc(&["pkg"], &[], "Message");
         let variant = desc(&["pkg"], &[], "Variant");
@@ -193,62 +196,75 @@ mod tests {
         assert_eq!(symbols.get_type(&variant), Some(TypeKind::Variant));
     }
 
+    #[test]
+    fn test_symbols_resolve_empty_reference() {
+        // Given: A symbol table.
+        let symbols = Symbols::default();
+        let scope = desc(&["foo"], &[], "Bar");
+
+        // When: Attempting to resolve an empty reference.
+        let result = symbols.find(&scope, "");
+
+        // Then: Resolution should fail.
+        assert_eq!(result, None);
+    }
+
     /* --------------------- Tests: Absolute references --------------------- */
 
     #[test]
-    fn test_resolve_absolute_package_level_type() {
+    fn test_symbols_resolve_absolute_package_level_type() {
         // Given: A symbol table with a package-level type.
         let mut symbols = Symbols::default();
-        let player = desc(&["game"], &[], "Player");
-        symbols.insert_type(player.clone(), TypeKind::Message);
+        let descriptor = desc(&["foo"], &[], "Bar");
+        symbols.insert_type(descriptor.clone(), TypeKind::Message);
 
         // When: Resolving an absolute reference.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".game.Player");
+        let result = symbols.find(&scope, ".foo.Bar");
 
         // Then: The type should be resolved correctly.
-        assert_eq!(result, Some((player, TypeKind::Message)));
+        assert_eq!(result, Some((descriptor, TypeKind::Message)));
     }
 
     #[test]
-    fn test_resolve_absolute_nested_type() {
+    fn test_symbols_resolve_absolute_nested_type() {
         // Given: A symbol table with a nested type.
         let mut symbols = Symbols::default();
-        let inner = desc(&["game"], &["Outer"], "Inner");
+        let inner = desc(&["foo"], &["Outer"], "Inner");
         symbols.insert_type(inner.clone(), TypeKind::Message);
 
         // When: Resolving an absolute reference.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".game.Outer.Inner");
+        let result = symbols.find(&scope, ".foo.Outer.Inner");
 
         // Then: The nested type should be resolved.
         assert_eq!(result, Some((inner, TypeKind::Message)));
     }
 
     #[test]
-    fn test_resolve_absolute_multi_part_package() {
+    fn test_symbols_resolve_absolute_multi_part_package() {
         // Given: A symbol table with a multi-part package.
         let mut symbols = Symbols::default();
-        let entity = desc(&["game", "entities"], &[], "Player");
-        symbols.insert_type(entity.clone(), TypeKind::Message);
+        let descriptor = desc(&["foo", "bar"], &[], "Baz");
+        symbols.insert_type(descriptor.clone(), TypeKind::Message);
 
         // When: Resolving an absolute reference.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".game.entities.Player");
+        let result = symbols.find(&scope, ".foo.bar.Baz");
 
         // Then: The type should be resolved.
-        assert_eq!(result, Some((entity, TypeKind::Message)));
+        assert_eq!(result, Some((descriptor, TypeKind::Message)));
     }
 
     #[test]
-    fn test_resolve_absolute_unknown_type() {
+    fn test_symbols_resolve_absolute_unknown_type() {
         // Given: A symbol table with some types.
         let mut symbols = Symbols::default();
-        symbols.insert_type(desc(&["game"], &[], "Player"), TypeKind::Message);
+        symbols.insert_type(desc(&["foor"], &[], "Bar"), TypeKind::Message);
 
         // When: Resolving a reference to an unknown type.
         let scope = desc(&["other"], &[], "Other");
-        let result = symbols.find(&scope, ".game.Unknown");
+        let result = symbols.find(&scope, ".foo.Unknown");
 
         // Then: Resolution should fail.
         assert_eq!(result, None);
@@ -257,33 +273,33 @@ mod tests {
     /* --------------------- Tests: Relative references --------------------- */
 
     #[test]
-    fn test_resolve_relative_sibling_type() {
+    fn test_symbols_resolve_relative_sibling_type() {
         // Given: Two types in the same package.
         let mut symbols = Symbols::default();
-        let player = desc(&["game"], &[], "Player");
-        let enemy = desc(&["game"], &[], "Enemy");
-        symbols.insert_type(player, TypeKind::Message);
-        symbols.insert_type(enemy.clone(), TypeKind::Message);
+        let bar = desc(&["foo"], &[], "Bar");
+        let baz = desc(&["foo"], &[], "Baz");
+        symbols.insert_type(bar, TypeKind::Message);
+        symbols.insert_type(baz.clone(), TypeKind::Message);
 
-        // When: Resolving a sibling reference from Player's scope.
-        let scope = desc(&["game"], &[], "Player");
-        let result = symbols.find(&scope, "Enemy");
+        // When: Resolving a sibling reference from Bar's scope.
+        let scope = desc(&["foo"], &[], "Other");
+        let result = symbols.find(&scope, "Baz");
 
         // Then: The sibling type should be found.
-        assert_eq!(result, Some((enemy, TypeKind::Message)));
+        assert_eq!(result, Some((baz, TypeKind::Message)));
     }
 
     #[test]
-    fn test_resolve_relative_nested_child() {
+    fn test_symbols_resolve_relative_nested_child() {
         // Given: A parent message with a nested child.
         let mut symbols = Symbols::default();
-        let outer = desc(&["game"], &[], "Outer");
-        let inner = desc(&["game"], &["Outer"], "Inner");
+        let outer = desc(&["foo"], &[], "Outer");
+        let inner = desc(&["foo"], &["Outer"], "Inner");
         symbols.insert_type(outer, TypeKind::Message);
         symbols.insert_type(inner.clone(), TypeKind::Message);
 
         // When: Resolving a child reference from the parent.
-        let scope = desc(&["game"], &[], "Outer");
+        let scope = desc(&["foo"], &[], "Outer");
         let result = symbols.find(&scope, "Inner");
 
         // Then: The child should be found.
@@ -291,18 +307,18 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_relative_parent_scope() {
+    fn test_symbols_resolve_relative_parent_scope() {
         // Given: Nested messages where an inner references an outer sibling.
         let mut symbols = Symbols::default();
-        let outer = desc(&["game"], &[], "Outer");
-        let sibling = desc(&["game"], &[], "Sibling");
-        let inner = desc(&["game"], &["Outer"], "Inner");
+        let outer = desc(&["foo"], &[], "Outer");
+        let sibling = desc(&["foo"], &[], "Sibling");
+        let inner = desc(&["foo"], &["Outer"], "Inner");
         symbols.insert_type(outer, TypeKind::Message);
         symbols.insert_type(sibling.clone(), TypeKind::Message);
         symbols.insert_type(inner, TypeKind::Message);
 
         // When: Resolving from inner scope to outer scope sibling.
-        let scope = desc(&["game"], &["Outer"], "Inner");
+        let scope = desc(&["foo"], &["Outer"], "Inner");
         let result = symbols.find(&scope, "Sibling");
 
         // Then: The type should be found in parent scope.
@@ -310,16 +326,16 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_relative_shadowing() {
+    fn test_symbols_resolve_relative_shadowing() {
         // Given: A type name exists at both nested and package level.
         let mut symbols = Symbols::default();
-        let package_level = desc(&["game"], &[], "Config");
-        let nested = desc(&["game"], &["Outer"], "Config");
+        let package_level = desc(&["foo"], &[], "Config");
+        let nested = desc(&["foo"], &["Outer"], "Config");
         symbols.insert_type(package_level, TypeKind::Message);
         symbols.insert_type(nested.clone(), TypeKind::Message);
 
         // When: Resolving from within Outer.
-        let scope = desc(&["game"], &["Outer"], "Inner");
+        let scope = desc(&["foo"], &["Outer"], "Inner");
         let result = symbols.find(&scope, "Config");
 
         // Then: The nested type should shadow the package-level type.
@@ -327,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_relative_multi_part_reference() {
+    fn test_symbols_resolve_relative_multi_part_reference() {
         // Given: A deeply nested type.
         let mut symbols = Symbols::default();
         let deep = desc(&["game"], &["Outer", "Middle"], "Inner");
@@ -342,63 +358,48 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_relative_imported_package() {
+    fn test_symbols_resolve_relative_imported_package() {
         // Given: Types in different packages.
         let mut symbols = Symbols::default();
-        let player = desc(&["game"], &[], "Player");
-        let enemy = desc(&["entities"], &[], "Enemy");
-        symbols.insert_type(player, TypeKind::Message);
-        symbols.insert_type(enemy.clone(), TypeKind::Message);
+        let bar = desc(&["foo"], &[], "Bar");
+        let baz = desc(&["entities"], &[], "Baz");
+        symbols.insert_type(bar, TypeKind::Message);
+        symbols.insert_type(baz.clone(), TypeKind::Message);
 
         // When: Resolving a cross-package reference.
-        let scope = desc(&["game"], &[], "Combat");
+        let scope = desc(&["foo"], &[], "Combat");
         let result = symbols.find(&scope, "entities.Enemy");
 
         // Then: The imported package type should be found.
-        assert_eq!(result, Some((enemy, TypeKind::Message)));
+        assert_eq!(result, Some((baz, TypeKind::Message)));
     }
 
     #[test]
-    fn test_resolve_relative_unknown_type() {
+    fn test_symbols_resolve_relative_unknown_type() {
         // Given: A symbol table with some types.
         let mut symbols = Symbols::default();
-        symbols.insert_type(desc(&["game"], &[], "Player"), TypeKind::Message);
+        symbols.insert_type(desc(&["food"], &[], "Bar"), TypeKind::Message);
 
         // When: Resolving a reference to an unknown type.
-        let scope = desc(&["game"], &[], "Player");
+        let scope = desc(&["food"], &[], "Bar");
         let result = symbols.find(&scope, "Unknown");
 
         // Then: Resolution should fail.
         assert_eq!(result, None);
     }
 
-    /* -------------------- Tests: Edge Cases ------------------- */
-
     #[test]
-    fn test_resolve_empty_reference() {
-        // Given: A symbol table
-        let symbols = Symbols::default();
-        let scope = desc(&["game"], &[], "Player");
-
-        // When: Attempting to resolve an empty reference
-        let result = symbols.find(&scope, "");
-
-        // Then: Resolution should fail
-        assert_eq!(result, None);
-    }
-
-    #[test]
-    fn test_resolve_deeply_nested_scope() {
-        // Given: A type at package level
+    fn test_symbols_resolve_relative_deeply_nested_scope() {
+        // Given: A type at package level.
         let mut symbols = Symbols::default();
-        let target = desc(&["game"], &[], "Target");
+        let target = desc(&["foo"], &[], "Target");
         symbols.insert_type(target.clone(), TypeKind::Message);
 
-        // When: Resolving from a deeply nested scope
-        let scope = desc(&["game"], &["A", "B", "C", "D"], "Deep");
+        // When: Resolving from a deeply nested scope.
+        let scope = desc(&["foo"], &["A", "B", "C", "D"], "Deep");
         let result = symbols.find(&scope, "Target");
 
-        // Then: The type should still be found (walks up to package root)
+        // Then: The type should still be found (walks up to package root).
         assert_eq!(result, Some((target, TypeKind::Message)));
     }
 
