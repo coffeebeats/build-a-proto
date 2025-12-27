@@ -152,27 +152,27 @@ mod tests {
 
     #[test]
     fn test_symbols_new_is_empty() {
-        // Given: A new symbol table
+        // Given: A new symbol table.
         let symbols = Symbols::default();
 
-        // When: Checking for any descriptor
+        // When: Checking for any descriptor.
         let descriptor = desc(&["pkg"], &[], "Type");
 
-        // Then: The symbol table should not contain it
+        // Then: The symbol table should not contain it.
         assert!(!symbols.contains(&descriptor));
         assert_eq!(symbols.get_type(&descriptor), None);
     }
 
     #[test]
     fn test_symbols_insert_and_contains() {
-        // Given: A symbol table
+        // Given: A symbol table.
         let mut symbols = Symbols::default();
         let descriptor = desc(&["pkg"], &[], "Message");
 
-        // When: Inserting a type
+        // When: Inserting a type.
         symbols.insert_type(descriptor.clone(), TypeKind::Message);
 
-        // Then: The type should be found
+        // Then: The type should be found.
         assert!(symbols.contains(&descriptor));
         assert_eq!(symbols.get_type(&descriptor), Some(TypeKind::Message));
     }
@@ -275,18 +275,18 @@ mod tests {
 
     #[test]
     fn test_resolve_relative_nested_child() {
-        // Given: A parent message with a nested child
+        // Given: A parent message with a nested child.
         let mut symbols = Symbols::default();
         let outer = desc(&["game"], &[], "Outer");
         let inner = desc(&["game"], &["Outer"], "Inner");
         symbols.insert_type(outer, TypeKind::Message);
         symbols.insert_type(inner.clone(), TypeKind::Message);
 
-        // When: Resolving a child reference from the parent
+        // When: Resolving a child reference from the parent.
         let scope = desc(&["game"], &[], "Outer");
         let result = symbols.find(&scope, "Inner");
 
-        // Then: The child should be found
+        // Then: The child should be found.
         assert_eq!(result, Some((inner, TypeKind::Message)));
     }
 
