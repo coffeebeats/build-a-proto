@@ -1,3 +1,4 @@
+use derive_more::Display;
 use thiserror::Error;
 
 /* -------------------------------------------------------------------------- */
@@ -42,7 +43,8 @@ pub enum PackageNameError {
 /// - `foo.Bar` (uppercase in segment)
 /// - `123.foo` (starts with digit)
 /// - `.foo` (missing leading segment)
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Hash)]
+#[display("{}", self.0.join("."))]
 pub struct PackageName(Vec<String>);
 
 /* ------------------------------- Impl: Deref ------------------------------ */
@@ -52,14 +54,6 @@ impl std::ops::Deref for PackageName {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-/* ---------------------------- Impl: Display ----------------------------- */
-
-impl std::fmt::Display for PackageName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.join("."))
     }
 }
 
