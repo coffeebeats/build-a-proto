@@ -37,40 +37,10 @@ pub struct Variant {
     pub name: String,
 }
 
-/* -------------------- Impl: From<crate::parse::Variant> ------------------- */
-
-impl<'a> From<crate::parse::Variant<'a>> for Variant {
-    fn from(value: crate::parse::Variant<'a>) -> Self {
-        VariantBuilder::default()
-            .comment(
-                value
-                    .comment
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect(),
-            )
-            .name(value.name.node)
-            .build()
-            .unwrap()
-    }
-}
-
 /* ---------------------------- Enum: VariantKind --------------------------- */
 
 #[derive(Clone, Debug, Display, PartialEq)]
 pub enum VariantKind {
     Field(Field),
     Variant(Variant),
-}
-
-/* ------------------ Impl: From<crate::parse::VariantKind> ----------------- */
-
-impl<'a> From<crate::parse::VariantKind<'a>> for VariantKind {
-    fn from(value: crate::parse::VariantKind<'a>) -> Self {
-        match value {
-            crate::parse::VariantKind::Field(f) => VariantKind::Field(Field::from(f)),
-            crate::parse::VariantKind::Variant(v) => VariantKind::Variant(Variant::from(v)),
-        }
-    }
 }

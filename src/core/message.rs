@@ -43,27 +43,6 @@ pub struct Field {
     pub typ: Type,
 }
 
-/* --------------------- Impl: From<crate::parse::Field> -------------------- */
-
-impl<'a> From<crate::parse::Field<'a>> for Field {
-    fn from(value: crate::parse::Field<'a>) -> Self {
-        FieldBuilder::default()
-            .comment(
-                value
-                    .comment
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect(),
-            )
-            .encoding(value.encoding.map(|s| s.node))
-            .name(value.name.node)
-            .index(value.index.unwrap().node)
-            .typ(Type::from(&value.typ))
-            .build()
-            .unwrap()
-    }
-}
 
 /* ----------------------------- Enum: Encoding ----------------------------- */
 
