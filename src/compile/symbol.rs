@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::core::Descriptor;
 use crate::core::SchemaImport;
+use crate::syntax::PackageName;
 use crate::syntax::Reference;
 
 /* -------------------------------------------------------------------------- */
@@ -123,7 +124,7 @@ impl Symbols {
 #[allow(dead_code)]
 pub struct ModuleMetadata {
     /// Package namespace
-    pub package: Vec<String>,
+    pub package: PackageName,
     /// Schema file dependencies (include statements)
     pub deps: Vec<SchemaImport>,
     /// Type descriptors defined in this module
