@@ -1,192 +1,149 @@
-//! DEPRECATED: This module will be replaced by `register.rs` as part of the
-//! semantic validation refactoring.
-//!
-//! The new `register` phase:
-//! - Preserves spans for better error reporting
-//! - Separates type registration from type lowering
-//! - Uses the `Symbols` table instead of directly building the `Registry`
-//!
-//! This module is kept temporarily until the command pipeline is updated (Step 6).
-
 use chumsky::error::Rich;
+use std::collections::HashMap;
 use std::path::Path;
 
-use crate::core::Descriptor;
-use crate::core::DescriptorBuilder;
-use crate::core::EnumBuilder;
-use crate::core::Field;
-use crate::core::ImportRoot;
-use crate::core::MessageBuilder;
-use crate::core::Module;
-use crate::core::Registry;
-use crate::core::SchemaImport;
-use crate::core::VariantKind;
-use crate::core::registry;
-use crate::parse::Expr;
-use crate::parse::ParseError;
-use crate::parse::Span;
+use crate::core::{Descriptor, DescriptorBuilder, ImportRoot, SchemaImport};
+use crate::parse::{Expr, ParseError, Span, Spanned};
 use crate::syntax::PackageName;
 
+use super::symbol::{ModuleMetadata, Symbols, TypeKind};
+
 /* -------------------------------------------------------------------------- */
-/*                                 Fn: Prepare                                */
+/*                               Struct: Context                              */
 /* -------------------------------------------------------------------------- */
 
-pub fn prepare<'a>(
-    schema_import: &'a SchemaImport,
+/// `Context` contains compilation context that preserves parsed expressions
+/// with spans for semantic validation while tracking type definitions in a
+/// symbol table.
+#[allow(unused)]
+#[derive(Default)]
+pub struct Context<'src> {
+    /// `symbols` is a symbol table tracking all type definitions.
+    pub symbols: Symbols,
+    /// `expressions` are parsed expressions per schema, preserving spans for
+    /// later validation.
+    pub expressions: HashMap<SchemaImport, Vec<Spanned<Expr<'src>>>>,
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Fn: register                                */
+/* -------------------------------------------------------------------------- */
+
+/// `register` registers types from parsed expressions into the compilation
+/// context.
+///
+/// This function:
+/// 1. Extracts package name, includes, and type definitions from expressions
+/// 2. Registers all type names into the symbol table ([`Symbols`])
+/// 3. Stores the original parsed expressions for later validation
+#[allow(unused)]
+pub fn register<'src>(
+    ctx: &mut Context<'src>,
     import_roots: &[ImportRoot],
-    registry: &'a mut Registry,
-    exprs: Vec<crate::parse::Spanned<Expr<'a>>>,
-) -> Result<(), ParseError<'a>> {
-    let mut enums: Vec<crate::parse::Enum> = vec![];
-    let mut messages: Vec<crate::parse::Message> = vec![];
-
-    let mut module = Module::new(schema_import.as_path().to_path_buf());
-
-    // First, inspect all expressions so all definitions can be registered.
-    for spanned_expr in exprs {
-        match spanned_expr.node {
-            Expr::Comment(_) => {} // Skip
-            Expr::Enum(enm) => enums.push(enm),
-            Expr::Message(msg) => messages.push(msg),
-            Expr::Package(segments) => {
-                // NOTE: The parser has already validated the package name syntax.
-                module.package =
-                    PackageName::try_from(segments.into_iter().collect::<Vec<_>>()).unwrap();
+    schema_import: &SchemaImport,
+    exprs: Vec<Spanned<Expr<'src>>>,
+) -> Result<(), ParseError<'src>> {
+    // Find package first, even though it adds an extra traversal, because it
+    // simplifies the remainder of the function. Additionally, the package
+    // declaration should be early on in the expression list.
+    let pkg = exprs
+        .iter()
+        .find_map(|expr| {
+            if let Expr::Package(segments) = &expr.node {
+                Some(
+                    PackageName::try_from(segments.to_vec())
+                        .expect("parser should validate package names"),
+                )
+            } else {
+                None
             }
+        })
+        .expect("missing package declaration");
+
+    let mut deps = Vec::new();
+    let mut type_descriptors = Vec::new();
+
+    for spanned_expr in &exprs {
+        match &spanned_expr.node {
+            Expr::Comment(_) => {}        // Skip comments
+            Expr::Package(segments) => {} // Already processed
             Expr::Include(include) => {
-                module.deps.push(resolve_include_path(
-                    &include,
+                deps.push(resolve_include_path(
+                    include,
                     import_roots,
                     spanned_expr.span,
                 )?);
             }
-            _ => unreachable!(),
+            Expr::Enum(enm) => {
+                let descriptor = build_descriptor(&pkg, &[], enm.name.node);
+                ctx.symbols
+                    .insert_type(descriptor.clone(), TypeKind::Variant);
+                type_descriptors.push(descriptor);
+
+                // TODO: Register nested enums (if we support them in the future)
+            }
+            Expr::Message(msg) => {
+                let descriptor = build_descriptor(&pkg, &[], msg.name.node);
+                ctx.symbols
+                    .insert_type(descriptor.clone(), TypeKind::Message);
+                type_descriptors.push(descriptor.clone());
+
+                register_nested_types(&mut ctx.symbols, &pkg, &[msg.name.node], msg);
+            }
+            _ => unreachable!(
+                "parser should only produce Package, Include, Enum, Message, or Comment"
+            ),
         }
     }
 
-    let package = &module.package;
+    let metadata = ModuleMetadata {
+        package: pkg,
+        deps,
+        types: type_descriptors,
+    };
 
-    fn register_enm(
-        registry: &mut Registry,
-        scope: Descriptor,
-        mut enm: crate::parse::Enum,
-    ) -> Descriptor {
-        debug_assert!(scope.name.is_none());
-
-        enm.variants.sort_by(|l, r| {
-            let l = match l {
-                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
-                crate::parse::VariantKind::Variant(variant) => {
-                    variant.index.as_ref().map(|s| s.node)
-                }
-            };
-            let r = match r {
-                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
-                crate::parse::VariantKind::Variant(variant) => {
-                    variant.index.as_ref().map(|s| s.node)
-                }
-            };
-
-            l.cmp(&r)
-        });
-
-        let d = DescriptorBuilder::default()
-            .package(scope.package)
-            .path(scope.path)
-            .name(enm.name.node.to_owned())
-            .build()
-            .unwrap();
-
-        let e = EnumBuilder::default()
-            .comment(
-                enm.comment
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect(),
-            )
-            .name(enm.name.node)
-            .variants(enm.variants.into_iter().map(VariantKind::from).collect())
-            .build()
-            .unwrap();
-
-        registry.insert(d.clone(), registry::Kind::Enum(e));
-
-        d
-    }
-
-    fn register_msg(
-        registry: &mut Registry,
-        scope: Descriptor,
-        mut msg: crate::parse::Message,
-    ) -> Descriptor {
-        debug_assert!(scope.name.is_none());
-
-        msg.fields.sort_by(|l, r| {
-            l.index
-                .as_ref()
-                .map(|s| s.node)
-                .cmp(&r.index.as_ref().map(|s| s.node))
-        });
-
-        let d = DescriptorBuilder::default()
-            .package(scope.package.clone())
-            .path(scope.path.clone())
-            .name(msg.name.node.to_owned())
-            .build()
-            .unwrap();
-
-        let mut m = MessageBuilder::default()
-            .comment(
-                msg.comment
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect(),
-            )
-            .name(msg.name.node)
-            .fields(msg.fields.into_iter().map(Field::from).collect())
-            .build()
-            .unwrap();
-
-        let mut scope = scope.clone();
-        scope.path.push(msg.name.node.to_owned());
-
-        m.enums = msg
-            .enums
-            .into_iter()
-            .map(|enm| register_enm(registry, scope.clone(), enm))
-            .collect();
-
-        m.messages = msg
-            .messages
-            .into_iter()
-            .map(|m| register_msg(registry, scope.clone(), m))
-            .collect();
-
-        registry.insert(d.clone(), registry::Kind::Message(m));
-
-        d
-    }
-
-    let scope = DescriptorBuilder::default()
-        .package(package.clone())
-        .build()
-        .unwrap();
-
-    module.enums = enums
-        .into_iter()
-        .map(|enm| register_enm(registry, scope.clone(), enm))
-        .collect();
-
-    module.messages = messages
-        .into_iter()
-        .map(|msg| register_msg(registry, scope.clone(), msg))
-        .collect();
-
-    registry.insert(scope, registry::Kind::Module(module));
+    ctx.symbols.insert_module(schema_import.clone(), metadata);
+    ctx.expressions.insert(schema_import.clone(), exprs);
 
     Ok(())
+}
+
+/* ----------------------- Fn: register_nested_types ------------------------ */
+
+/// Recursively registers nested messages and enums within a message.
+fn register_nested_types<'src>(
+    symbols: &mut Symbols,
+    package: &PackageName,
+    path: &[&'src str],
+    msg: &crate::parse::Message<'src>,
+) {
+    for enm in &msg.enums {
+        let mut nested_path = path.to_vec();
+        nested_path.push(enm.name.node);
+        let descriptor = build_descriptor(package, path, enm.name.node);
+        symbols.insert_type(descriptor, TypeKind::Variant);
+    }
+
+    for nested_msg in &msg.messages {
+        let mut nested_path = path.to_vec();
+        nested_path.push(nested_msg.name.node);
+        let descriptor = build_descriptor(package, path, nested_msg.name.node);
+        symbols.insert_type(descriptor, TypeKind::Message);
+
+        register_nested_types(symbols, package, &nested_path, nested_msg);
+    }
+}
+
+/* ------------------------- Fn: build_descriptor --------------------------- */
+
+/// Builds a Descriptor from package, path, and name components.
+fn build_descriptor(package: &PackageName, path: &[&str], name: &str) -> Descriptor {
+    DescriptorBuilder::default()
+        .package(package.clone())
+        .path(path.iter().map(|s| s.to_string()).collect())
+        .name(name.to_owned())
+        .build()
+        .expect("descriptor should be valid")
 }
 
 /* ------------------------ Fn: resolve_include_path ------------------------ */
@@ -218,7 +175,6 @@ fn resolve_include_path<'a>(
 /* -------------------------------------------------------------------------- */
 
 #[cfg(test)]
-/// TODO: Migrate these tests once [`crate::compile::register`] is utilized.
 mod tests {
     use super::*;
     use std::fs;
@@ -325,4 +281,12 @@ mod tests {
         // Then: An error is returned.
         assert!(result.is_err());
     }
+
+    // TODO: Add tests for register() function (Step 8.4 and 8.5)
+    // - test_register_populates_symbols
+    // - test_register_nested_message_types
+    // - test_register_nested_enum_types
+    // - test_register_stores_expressions
+    // - test_register_extracts_package_name
+    // - test_register_resolves_includes
 }
