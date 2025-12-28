@@ -1,6 +1,5 @@
 pub mod enumeration;
 pub mod message;
-pub mod package;
 pub mod path;
 pub mod registry;
 pub mod types;
@@ -12,10 +11,6 @@ pub use enumeration::*;
 /* ------------------------------ Mod: Message ------------------------------ */
 
 pub use message::*;
-
-/* ------------------------------ Mod: Package ------------------------------ */
-
-pub use package::*;
 
 /* -------------------------------- Mod: Path ------------------------------- */
 
@@ -36,6 +31,8 @@ pub use types::*;
 use derive_builder::Builder;
 use derive_more::Display;
 use std::path::PathBuf;
+
+use crate::syntax::PackageName;
 
 #[derive(Builder, Clone, Debug, Display)]
 #[display("Module({:?}): {:?}", self.path.as_path(), self.messages.iter().chain(self.enums.iter()).map(ToString::to_string).collect::<Vec<_>>())]

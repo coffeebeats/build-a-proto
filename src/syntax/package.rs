@@ -1,3 +1,4 @@
+use derive_more::Display;
 use thiserror::Error;
 
 /* -------------------------------------------------------------------------- */
@@ -30,7 +31,7 @@ pub enum PackageNameError {
 /// - Start with a lowercase ASCII letter
 /// - Contain only lowercase ASCII letters, digits, and underscores
 ///
-/// # Examples
+/// ### Examples
 ///
 /// Valid package names:
 /// - `foo`
@@ -42,47 +43,9 @@ pub enum PackageNameError {
 /// - `foo.Bar` (uppercase in segment)
 /// - `123.foo` (starts with digit)
 /// - `.foo` (missing leading segment)
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Hash)]
+#[display("{}", self.0.join("."))]
 pub struct PackageName(Vec<String>);
-
-/* ---------------------------- Impl: PackageName --------------------------- */
-
-impl PackageName {
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-/* ------------------------ Impl: TryFrom<Vec<&str>> ------------------------ */
-
-impl<'a> TryFrom<Vec<&'a str>> for PackageName {
-    type Error = PackageNameError;
-
-    fn try_from(value: Vec<&'a str>) -> Result<Self, Self::Error> {
-        if value.is_empty() {
-            return Err(PackageNameError::Empty);
-        }
-
-        for segment in &value {
-            let Some(first) = segment.chars().next() else {
-                return Err(PackageNameError::MissingSegment(value.join(".")));
-            };
-
-            if !first.is_ascii_lowercase() {
-                return Err(PackageNameError::InvalidStart((*segment).to_owned()));
-            }
-
-            if !segment
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-            {
-                return Err(PackageNameError::InvalidCharacters((*segment).to_owned()));
-            }
-        }
-
-        Ok(Self(value.into_iter().map(|s| s.to_owned()).collect()))
-    }
-}
 
 /* ------------------------------- Impl: Deref ------------------------------ */
 
@@ -94,11 +57,51 @@ impl std::ops::Deref for PackageName {
     }
 }
 
-/* ---------------------------- Impl: Display ----------------------------- */
+/* ------------------------ Impl: TryFrom<Vec<&str>> ------------------------ */
 
-impl std::fmt::Display for PackageName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.join("."))
+impl<T> TryFrom<Vec<T>> for PackageName
+where
+    T: AsRef<str>,
+{
+    type Error = PackageNameError;
+
+    fn try_from(value: Vec<T>) -> Result<Self, Self::Error> {
+        if value.is_empty() {
+            return Err(PackageNameError::Empty);
+        }
+
+        for segment in &value {
+            let Some(first) = segment.as_ref().chars().next() else {
+                return Err(PackageNameError::MissingSegment(
+                    value
+                        .iter()
+                        .map(|s| s.as_ref())
+                        .collect::<Vec<_>>()
+                        .join("."),
+                ));
+            };
+
+            if !first.is_ascii_lowercase() {
+                return Err(PackageNameError::InvalidStart(segment.as_ref().to_owned()));
+            }
+
+            if !segment
+                .as_ref()
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            {
+                return Err(PackageNameError::InvalidCharacters(
+                    segment.as_ref().to_owned(),
+                ));
+            }
+        }
+
+        Ok(Self(
+            value
+                .into_iter()
+                .map(|s| s.as_ref().to_owned())
+                .collect::<Vec<_>>(),
+        ))
     }
 }
 
@@ -114,7 +117,7 @@ mod tests {
     fn test_package_name_valid_single_segment() {
         let result = PackageName::try_from(vec!["foo"]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), PackageName(vec!["foo".to_owned()]));
+        assert_eq!(result.unwrap(), PackageName(vec!["foo".into()]));
     }
 
     #[test]
@@ -123,7 +126,7 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
-            PackageName(vec!["foo".to_owned(), "bar".to_owned()])
+            PackageName(vec!["foo".into(), "bar".into()])
         );
     }
 
@@ -133,7 +136,7 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
-            PackageName(vec!["my_package".to_owned(), "sub_module".to_owned()])
+            PackageName(vec!["my_package".into(), "sub_module".into()])
         );
     }
 
@@ -145,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_package_name_rejects_empty() {
-        let result = PackageName::try_from(vec![]);
+        let result = PackageName::try_from(Vec::<String>::default());
         assert_eq!(result.unwrap_err(), PackageNameError::Empty);
     }
 
@@ -179,15 +182,6 @@ mod tests {
     #[test]
     fn test_package_name_segments() {
         let pkg = PackageName::try_from(vec!["foo", "bar"]);
-        assert_eq!(
-            pkg,
-            Ok(PackageName(vec!["foo".to_owned(), "bar".to_owned()]))
-        );
-    }
-
-    #[test]
-    fn test_package_name_len() {
-        let pkg = PackageName::try_from(vec!["foo", "bar"]).unwrap();
-        assert_eq!(pkg.len(), 2);
+        assert_eq!(pkg, Ok(PackageName(vec!["foo".into(), "bar".into()])));
     }
 }

@@ -11,6 +11,8 @@ use chumsky::text::ascii::ident;
 use thiserror::Error;
 
 use crate::core::Encoding;
+use crate::syntax::PackageNameError;
+use crate::syntax::Reference;
 
 use super::Enum;
 use super::Expr;
@@ -42,22 +44,6 @@ pub enum ImportPathError {
 
     #[error("filename cannot be just '.baproto'")]
     EmptyFilename,
-}
-
-/* -------------------------------------------------------------------------- */
-/*                          Enum: PackageNameError                            */
-/* -------------------------------------------------------------------------- */
-
-#[derive(Error, Debug, Clone, PartialEq)]
-pub enum PackageNameError {
-    #[error("package name cannot be empty")]
-    Empty,
-
-    #[error("package segment '{0}' contains invalid characters (only [a-zA-Z0-9_] allowed)")]
-    InvalidCharacters(String),
-
-    #[error("package segment '{0}' must start with a lowercase letter")]
-    InvalidStart(String),
 }
 
 /* -------------------------------------------------------------------------- */
@@ -174,10 +160,25 @@ where
                 .at_least(1)
                 .collect::<Vec<_>>(),
         )
-        .map(|(leading_dot, segments)| TypeKind::Reference {
-            absolute: leading_dot.is_some(),
-            name: segments.last().unwrap().to_string(),
-            path: segments.iter().take(segments.len() - 1).copied().collect(),
+        .map_with(|(leading_dot, segments), e| (leading_dot, segments, e.span()))
+        .validate(|(leading_dot, segments, span), _, emitter| {
+            let absolute = leading_dot.is_some();
+            let name = segments.last().unwrap();
+            let path: Vec<_> = segments.iter().take(segments.len() - 1).copied().collect();
+
+            let result = if absolute {
+                Reference::try_new_absolute(path, name)
+            } else {
+                Reference::try_new_relative(path, name)
+            };
+
+            match result {
+                Ok(r) => TypeKind::Reference(r),
+                Err(err) => {
+                    emitter.emit(Rich::custom(span, format!("invalid reference: {}", err)));
+                    TypeKind::Invalid
+                }
+            }
         })
         .map_with(|kind, e| Type {
             kind,
@@ -972,17 +973,12 @@ mod tests {
         };
 
         // Then: The field has the correct type reference.
-        let TypeKind::Reference {
-            absolute,
-            path,
-            name,
-        } = &msg.fields[0].typ.kind
-        else {
+        let TypeKind::Reference(r) = &msg.fields[0].typ.kind else {
             panic!("Expected Reference type");
         };
-        assert!(!absolute, "Expected relative reference");
-        assert_eq!(name, "MyType");
-        assert_eq!(path, &vec!["other", "package"]);
+        assert!(!r.is_absolute(), "Expected relative reference");
+        assert_eq!(r.name(), "MyType");
+        assert_eq!(r.path(), vec!["other", "package"]);
     }
 
     #[test]
@@ -1025,16 +1021,11 @@ mod tests {
         };
 
         // Then: The field has the correct absolute type reference.
-        let TypeKind::Reference {
-            absolute,
-            path,
-            name,
-        } = &msg.fields[0].typ.kind
-        else {
+        let TypeKind::Reference(r) = &msg.fields[0].typ.kind else {
             panic!("Expected Reference type");
         };
-        assert!(absolute, "Expected absolute reference");
-        assert_eq!(path, &vec!["other", "package"]);
-        assert_eq!(name, "MyType");
+        assert!(r.is_absolute(), "Expected absolute reference");
+        assert_eq!(r.path(), vec!["other", "package"]);
+        assert_eq!(r.name(), "MyType");
     }
 }

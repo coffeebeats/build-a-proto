@@ -6,6 +6,7 @@ use chumsky::input::ValueInput;
 use derive_builder::Builder;
 
 use crate::core::Encoding;
+use crate::syntax::Reference;
 
 use super::Span;
 use super::Spanned;
@@ -121,7 +122,7 @@ pub struct Field<'src> {
     #[builder(default, setter(strip_option))]
     pub index: Option<Spanned<usize>>,
     pub name: Spanned<&'src str>,
-    pub typ: Type<'src>,
+    pub typ: Type,
 }
 
 /* ----------------------------- Struct: Variant ---------------------------- */
@@ -148,8 +149,8 @@ pub enum VariantKind<'src> {
 
 /// `Type` is a parsed type with its source location.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Type<'src> {
-    pub kind: TypeKind<'src>,
+pub struct Type {
+    pub kind: TypeKind,
     pub span: Span,
 }
 
@@ -157,12 +158,10 @@ pub struct Type<'src> {
 
 /// `TypeKind` is an enumeration of different expression data types.
 #[derive(Clone, Debug, PartialEq)]
-pub enum TypeKind<'src> {
-    Reference {
-        absolute: bool,
-        path: Vec<&'src str>,
-        name: String,
-    },
+pub enum TypeKind {
+    Invalid, // Placeholder to support error recovery during parsing
+
+    Reference(Reference),
 
     // Scalars
     Bit,
@@ -181,6 +180,6 @@ pub enum TypeKind<'src> {
     UnsignedInt8,
 
     // Containers
-    Array(Box<Type<'src>>, Option<usize>),
-    Map(Box<Type<'src>>, Box<Type<'src>>),
+    Array(Box<Type>, Option<usize>),
+    Map(Box<Type>, Box<Type>),
 }

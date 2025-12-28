@@ -1,3 +1,4 @@
+mod convert;
 mod expr;
 mod lexer;
 mod parser;

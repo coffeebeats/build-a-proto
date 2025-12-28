@@ -3,6 +3,7 @@ mod compile;
 mod core;
 mod generate;
 mod parse;
+mod syntax;
 
 use anyhow::Result;
 use clap::Parser;
