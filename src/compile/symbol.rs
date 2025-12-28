@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::core::Descriptor;
-use crate::core::Reference;
 use crate::core::SchemaImport;
+use crate::syntax::Reference;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Symbols                              */
@@ -153,7 +153,7 @@ pub enum TypeKind {
 mod tests {
     use super::*;
     use crate::core::DescriptorBuilder;
-    use crate::core::PackageName;
+    use crate::syntax::PackageName;
 
     #[test]
     fn test_symbols_contains() {
@@ -409,12 +409,12 @@ mod tests {
     /* ---------------------------- Fn: type_ref ---------------------------- */
 
     fn type_ref(path: &[&str], name: &str) -> Reference {
-        Reference::new_relative(path.iter().map(|&s| s.to_owned()).collect(), name)
+        Reference::try_new_relative(path.iter().map(|&s| s.to_owned()).collect(), name).unwrap()
     }
 
     /* -------------------------- Fn: type_ref_abs -------------------------- */
 
     fn type_ref_abs(path: &[&str], name: &str) -> Reference {
-        Reference::new_absolute(path.iter().map(|&s| s.to_owned()).collect(), name)
+        Reference::try_new_absolute(path.iter().map(|&s| s.to_owned()).collect(), name).unwrap()
     }
 }
