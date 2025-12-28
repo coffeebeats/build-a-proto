@@ -11,6 +11,8 @@ use chumsky::text::ascii::ident;
 use thiserror::Error;
 
 use crate::core::Encoding;
+use crate::syntax::PackageNameError;
+use crate::syntax::Reference;
 
 use super::Enum;
 use super::Expr;
@@ -42,22 +44,6 @@ pub enum ImportPathError {
 
     #[error("filename cannot be just '.baproto'")]
     EmptyFilename,
-}
-
-/* -------------------------------------------------------------------------- */
-/*                          Enum: PackageNameError                            */
-/* -------------------------------------------------------------------------- */
-
-#[derive(Error, Debug, Clone, PartialEq)]
-pub enum PackageNameError {
-    #[error("package name cannot be empty")]
-    Empty,
-
-    #[error("package segment '{0}' contains invalid characters (only [a-zA-Z0-9_] allowed)")]
-    InvalidCharacters(String),
-
-    #[error("package segment '{0}' must start with a lowercase letter")]
-    InvalidStart(String),
 }
 
 /* -------------------------------------------------------------------------- */
