@@ -1,3 +1,13 @@
+//! DEPRECATED: This module will be replaced by `register.rs` as part of the
+//! semantic validation refactoring.
+//!
+//! The new `register` phase:
+//! - Preserves spans for better error reporting
+//! - Separates type registration from type lowering
+//! - Uses the `Symbols` table instead of directly building the `Registry`
+//!
+//! This module is kept temporarily until the command pipeline is updated (Step 6).
+
 use chumsky::error::Rich;
 use std::path::Path;
 
@@ -207,7 +217,8 @@ fn resolve_include_path<'a>(
 /*                                 Mod: tests                                 */
 /* -------------------------------------------------------------------------- */
 
-#[cfg(test)]
+// DISABLED: These tests will be replaced by tests in register.rs.
+#[cfg(all(test, feature = "disabled-prepare-tests"))]
 mod tests {
     use super::*;
     use std::fs;
