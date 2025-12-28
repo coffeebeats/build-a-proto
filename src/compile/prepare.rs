@@ -217,8 +217,8 @@ fn resolve_include_path<'a>(
 /*                                 Mod: tests                                 */
 /* -------------------------------------------------------------------------- */
 
-// DISABLED: These tests will be replaced by tests in register.rs.
-#[cfg(all(test, feature = "disabled-prepare-tests"))]
+#[cfg(test)]
+/// TODO: Migrate these tests once [`crate::compile::register`] is utilized.
 mod tests {
     use super::*;
     use std::fs;
