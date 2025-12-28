@@ -1,5 +1,6 @@
 pub mod enumeration;
 pub mod message;
+pub mod package;
 pub mod path;
 pub mod registry;
 pub mod types;
@@ -11,6 +12,10 @@ pub use enumeration::*;
 /* ------------------------------ Mod: Message ------------------------------ */
 
 pub use message::*;
+
+/* ------------------------------ Mod: Package ------------------------------ */
+
+pub use package::*;
 
 /* -------------------------------- Mod: Path ------------------------------- */
 
@@ -36,8 +41,7 @@ use std::path::PathBuf;
 #[display("Module({:?}): {:?}", self.path.as_path(), self.messages.iter().chain(self.enums.iter()).map(ToString::to_string).collect::<Vec<_>>())]
 pub struct Module {
     pub path: PathBuf,
-    #[builder(default)]
-    pub package: Vec<String>,
+    pub package: PackageName,
     #[builder(default)]
     pub deps: Vec<SchemaImport>,
     #[builder(default)]

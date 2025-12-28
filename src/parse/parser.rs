@@ -7,6 +7,7 @@ use chumsky::input::Emitter;
 use chumsky::input::MapExtra;
 use chumsky::input::ValueInput;
 use chumsky::prelude::*;
+use chumsky::text::ascii::ident;
 use thiserror::Error;
 
 use crate::core::Encoding;
@@ -44,6 +45,22 @@ pub enum ImportPathError {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                          Enum: PackageNameError                            */
+/* -------------------------------------------------------------------------- */
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum PackageNameError {
+    #[error("package name cannot be empty")]
+    Empty,
+
+    #[error("package segment '{0}' contains invalid characters (only [a-zA-Z0-9_] allowed)")]
+    InvalidCharacters(String),
+
+    #[error("package segment '{0}' must start with a lowercase letter")]
+    InvalidStart(String),
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                  Fn: Parse                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -78,6 +95,20 @@ where
     let package = just(Token::Keyword(Keyword::Package))
         .ignore_then(string)
         .then_ignore(just(Token::Semicolon))
+        .map_with(|s: &str, e| (s, e.span()))
+        .validate(
+            |(s, span), _, emitter| match package_name().parse(s).into_result() {
+                Ok(segments) => segments,
+                Err(errs) => {
+                    for err in errs {
+                        let msg = format!("{}", err.reason());
+                        emitter.emit(Rich::custom(span, msg));
+                    }
+
+                    vec![]
+                }
+            },
+        )
         .map(Expr::Package)
         .map_with(Expr::with_span)
         .labelled("package")
@@ -133,10 +164,25 @@ where
 
     // Types
 
-    let reference = ident.map(TypeKind::Reference).map_with(|kind, e| Type {
-        kind,
-        span: e.span(),
-    });
+    let reference = just(Token::Dot)
+        .or_not()
+        .then(
+            ident
+                // TODO: Add support for segment-specific error-reporting/spans.
+                // .map_with(|id, e| Spanned::new(id, e.span()))
+                .separated_by(just(Token::Dot))
+                .at_least(1)
+                .collect::<Vec<_>>(),
+        )
+        .map(|(leading_dot, segments)| TypeKind::Reference {
+            absolute: leading_dot.is_some(),
+            name: segments.last().unwrap().to_string(),
+            path: segments.iter().take(segments.len() - 1).copied().collect(),
+        })
+        .map_with(|kind, e| Type {
+            kind,
+            span: e.span(),
+        });
 
     let scalar = select! {
         Token::Ident("bit") => TypeKind::Bit,
@@ -391,19 +437,51 @@ where
         vec![]
     });
 
-    // FIXME: Exclude standalone line comments from parsed output.
-    let ast = just(Token::Newline)
+    // Leading content: newlines and line comments before package declaration.
+    let leading = choice((
+        just(Token::Newline).to(None),
+        line_comment.clone().map_with(Expr::with_span).map(Some),
+    ))
+    .repeated()
+    .collect::<Vec<_>>()
+    .map(|v| v.into_iter().flatten().collect::<Vec<_>>());
+
+    // Header: leading content, a required package declaration, and includes.
+    let header = leading.then(package).then(
+        choice((
+            just(Token::Newline).to(None),
+            include.map(Some),
+            line_comment.clone().map_with(Expr::with_span).map(Some),
+        ))
         .repeated()
-        .ignore_then(choice((
-            message.map_with(Expr::with_span),
-            enumeration.map_with(Expr::with_span),
-            package,
-            include,
-            line_comment.map_with(Expr::with_span),
-        )))
-        .recover_with(skip_then_retry_until(any().ignored(), end()))
-        .repeated()
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .map(|v| v.into_iter().flatten().collect::<Vec<_>>()),
+    );
+
+    let declaration = choice((
+        message.map_with(Expr::with_span),
+        enumeration.map_with(Expr::with_span),
+    ))
+    .recover_with(skip_then_retry_until(any().ignored(), end()));
+
+    let declarations = choice((
+        just(Token::Newline).to(None),
+        declaration.map(Some),
+        line_comment.map_with(Expr::with_span).map(Some),
+    ))
+    .repeated()
+    .collect::<Vec<_>>()
+    .map(|v: Vec<Option<Spanned<Expr<'src>>>>| v.into_iter().flatten().collect::<Vec<_>>());
+
+    let ast = header
+        .then(declarations)
+        .map(|(((leading_comments, pkg), includes), decls)| {
+            let mut exprs: Vec<Spanned<Expr<'src>>> = leading_comments;
+            exprs.push(pkg);
+            exprs.extend(includes);
+            exprs.extend(decls);
+            exprs
+        });
 
     missing.or(ast)
 }
@@ -411,17 +489,6 @@ where
 /* ----------------------------- Fn: import_path ---------------------------- */
 
 /// Parses an import path string into a [`PathBuf`].
-///
-/// Valid paths:
-/// - `foo.baproto`
-/// - `foo/bar/baz.baproto`
-///
-/// Invalid paths:
-/// - `./foo.baproto` (relative segment)
-/// - `../foo.baproto` (relative segment)
-/// - `foo/bar` (missing .baproto extension)
-/// - `foo./bar` (trailing '.' character)
-/// - `.baproto` (empty filename)
 fn import_path<'a>() -> impl Parser<'a, &'a str, PathBuf, extra::Err<Rich<'a, char>>> {
     let character =
         any().filter(|c: &char| c.is_ascii_alphanumeric() || ['_', '-', '.'].contains(c));
@@ -456,6 +523,48 @@ fn import_path<'a>() -> impl Parser<'a, &'a str, PathBuf, extra::Err<Rich<'a, ch
             }
 
             Ok(segments.into_iter().collect::<PathBuf>())
+        })
+        .then_ignore(end())
+}
+
+/* ----------------------------- Fn: package_name ---------------------------- */
+
+/// Parses a package name string into a vector of segments.
+fn package_name<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<Rich<'a, char>>> {
+    let segment = ident()
+        .map_with(|s: &'a str, e| Spanned::new(s, e.span()))
+        .validate(|spanned, _info, emitter| {
+            let s = spanned.node;
+
+            if let Some(first) = s.chars().next() {
+                if !first.is_ascii_lowercase() {
+                    emitter.emit(Rich::custom(
+                        spanned.span,
+                        PackageNameError::InvalidStart(s.to_owned()),
+                    ));
+                }
+            }
+
+            if s.chars().any(|c| c.is_ascii_uppercase()) {
+                emitter.emit(Rich::custom(
+                    spanned.span,
+                    PackageNameError::InvalidCharacters(s.to_owned()),
+                ));
+            }
+
+            s
+        });
+
+    segment
+        .separated_by(just('.'))
+        .at_least(1)
+        .collect::<Vec<_>>()
+        .validate(|segments, info, emitter| {
+            if segments.is_empty() {
+                emitter.emit(Rich::custom(info.span(), PackageNameError::Empty));
+            }
+
+            segments
         })
         .then_ignore(end())
 }
@@ -613,7 +722,7 @@ mod tests {
 
         // Then: The output expression list matches expectations.
         let exprs = vec![
-            Spanned::new(Expr::Package("abc.def"), Span::from(1..4)),
+            Spanned::new(Expr::Package(vec!["abc", "def"]), Span::from(1..4)),
             Spanned::new(
                 Expr::Include(PathBuf::from("a/b/c.baproto")),
                 Span::from(6..9),
@@ -627,6 +736,9 @@ mod tests {
     fn test_include_rejects_dot_prefix() {
         // Given: An input with a ./ prefixed include path.
         let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
             Token::Newline,
             Token::Keyword(Keyword::Include),
             Token::String("./local/file.baproto"),
@@ -648,6 +760,9 @@ mod tests {
     fn test_include_rejects_dotdot_prefix() {
         // Given: An input with a ../ prefixed include path.
         let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
             Token::Newline,
             Token::Keyword(Keyword::Include),
             Token::String("../parent/file.baproto"),
@@ -669,6 +784,9 @@ mod tests {
     fn test_include_rejects_trailing_dot() {
         // Given: An input with a '.' suffix in include path.
         let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
             Token::Newline,
             Token::Keyword(Keyword::Include),
             Token::String("foo./bar.baproto"),
@@ -690,6 +808,9 @@ mod tests {
     fn test_include_rejects_missing_extension() {
         // Given: An input with a path missing the .baproto extension.
         let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
             Token::Newline,
             Token::Keyword(Keyword::Include),
             Token::String("foo/bar"),
@@ -711,6 +832,9 @@ mod tests {
     fn test_include_rejects_wrong_extension() {
         // Given: An input with a wrong extension.
         let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
             Token::Newline,
             Token::Keyword(Keyword::Include),
             Token::String("foo/bar.txt"),
@@ -732,6 +856,9 @@ mod tests {
     fn test_include_rejects_empty_filename() {
         // Given: An input with just '.baproto' as the filename.
         let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
             Token::Newline,
             Token::Keyword(Keyword::Include),
             Token::String(".baproto"),
@@ -753,6 +880,10 @@ mod tests {
     fn test_line_comment_in_message_returns_correct_expr_list() {
         // Given: An input list of tokens.
         let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
+            Token::Newline,
             Token::Keyword(Keyword::Message),
             Token::Ident("Message"),
             Token::BlockOpen,
@@ -775,27 +906,135 @@ mod tests {
 
         // Then: The output expression list matches expectations.
         use super::TypeKind;
-        let exprs = vec![Spanned::new(
-            MessageBuilder::default()
-                .span(Span::from(0..12))
-                .name(Spanned::new("Message", Span::from(1..2)))
-                .fields(vec![
-                    FieldBuilder::default()
-                        .span(Span::from(7..10))
-                        .name(Spanned::new("sequence_id", Span::from(8..9)))
-                        .typ(Type {
-                            kind: TypeKind::UnsignedInt8,
-                            span: Span::from(7..8),
-                        })
-                        .index(Spanned::new(0, Span::from(7..10)))
-                        .build()
-                        .unwrap(),
-                ])
-                .build()
-                .unwrap()
-                .into(),
-            Span::from(0..12),
-        )];
+        let exprs = vec![
+            Spanned::new(Expr::Package(vec!["test"]), Span::from(0..3)),
+            Spanned::new(
+                MessageBuilder::default()
+                    .span(Span::from(4..16))
+                    .name(Spanned::new("Message", Span::from(5..6)))
+                    .fields(vec![
+                        FieldBuilder::default()
+                            .span(Span::from(11..14))
+                            .name(Spanned::new("sequence_id", Span::from(12..13)))
+                            .typ(Type {
+                                kind: TypeKind::UnsignedInt8,
+                                span: Span::from(11..12),
+                            })
+                            .index(Spanned::new(0, Span::from(11..14)))
+                            .build()
+                            .unwrap(),
+                    ])
+                    .build()
+                    .unwrap()
+                    .into(),
+                Span::from(4..16),
+            ),
+        ];
         assert_eq!(output.output(), Some(&exprs));
+    }
+
+    #[test]
+    fn test_relative_type_reference_parses_correctly() {
+        // Given: An input with a dot-separated relative type reference.
+        let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::Keyword(Keyword::Message),
+            Token::Ident("Message"),
+            Token::BlockOpen,
+            Token::Newline,
+            Token::Ident("other"),
+            Token::Dot,
+            Token::Ident("package"),
+            Token::Dot,
+            Token::Ident("MyType"),
+            Token::Ident("field_name"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::BlockClose,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has no errors.
+        assert!(
+            !output.has_errors(),
+            "Errors: {:?}",
+            output.errors().collect::<Vec<_>>()
+        );
+
+        let exprs = output.output().unwrap();
+        let Expr::Message(msg) = &exprs[1].node else {
+            panic!("Expected Message");
+        };
+
+        // Then: The field has the correct type reference.
+        let TypeKind::Reference {
+            absolute,
+            path,
+            name,
+        } = &msg.fields[0].typ.kind
+        else {
+            panic!("Expected Reference type");
+        };
+        assert!(!absolute, "Expected relative reference");
+        assert_eq!(name, "MyType");
+        assert_eq!(path, &vec!["other", "package"]);
+    }
+
+    #[test]
+    fn test_absolute_type_reference_parses_correctly() {
+        // Given: An input with a dot-prefixed absolute type reference.
+        let input = vec![
+            Token::Keyword(Keyword::Package),
+            Token::String("test"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::Keyword(Keyword::Message),
+            Token::Ident("Message"),
+            Token::BlockOpen,
+            Token::Newline,
+            Token::Dot, // Leading dot for absolute reference
+            Token::Ident("other"),
+            Token::Dot,
+            Token::Ident("package"),
+            Token::Dot,
+            Token::Ident("MyType"),
+            Token::Ident("field_name"),
+            Token::Semicolon,
+            Token::Newline,
+            Token::BlockClose,
+        ];
+
+        // When: The input is parsed.
+        let output = parser().parse(input.as_slice());
+
+        // Then: The input has no errors.
+        assert!(
+            !output.has_errors(),
+            "Errors: {:?}",
+            output.errors().collect::<Vec<_>>()
+        );
+
+        let exprs = output.output().unwrap();
+        let Expr::Message(msg) = &exprs[1].node else {
+            panic!("Expected Message");
+        };
+
+        // Then: The field has the correct absolute type reference.
+        let TypeKind::Reference {
+            absolute,
+            path,
+            name,
+        } = &msg.fields[0].typ.kind
+        else {
+            panic!("Expected Reference type");
+        };
+        assert!(absolute, "Expected absolute reference");
+        assert_eq!(path, &vec!["other", "package"]);
+        assert_eq!(name, "MyType");
     }
 }

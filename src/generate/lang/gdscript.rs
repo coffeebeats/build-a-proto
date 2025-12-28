@@ -187,7 +187,7 @@ impl<W: Writer> Generator<W> for GDScript {
             match typ {
                 crate::core::Type::Array(t, _) => format!("Array[{}]", &render_type(t)),
                 crate::core::Type::Map(k, v) => format!("Dictionary[{}, {}]", k, v),
-                crate::core::Type::Reference(s) => s.to_owned(),
+                crate::core::Type::Reference(r) => r.to_string(),
                 crate::core::Type::Scalar(scalar) => match scalar {
                     crate::core::Scalar::Bit => "bool",
                     crate::core::Scalar::Bool => "bool",

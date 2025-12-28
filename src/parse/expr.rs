@@ -24,7 +24,7 @@ pub enum Expr<'src> {
     // Metadata
     Comment(&'src str),
     Include(PathBuf),
-    Package(&'src str),
+    Package(Vec<&'src str>),
 
     // Properties
     Field(Field<'src>),
@@ -158,7 +158,11 @@ pub struct Type<'src> {
 /// `TypeKind` is an enumeration of different expression data types.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TypeKind<'src> {
-    Reference(&'src str),
+    Reference {
+        absolute: bool,
+        path: Vec<&'src str>,
+        name: String,
+    },
 
     // Scalars
     Bit,

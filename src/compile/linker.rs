@@ -111,10 +111,16 @@ fn detect_cycle(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::core::{DescriptorBuilder, Module, ModuleBuilder, registry::Kind};
     use std::path::Path;
     use tempfile::TempDir;
+
+    use crate::core::DescriptorBuilder;
+    use crate::core::Module;
+    use crate::core::ModuleBuilder;
+    use crate::core::PackageName;
+    use crate::core::registry::Kind;
+
+    use super::*;
 
     #[test]
     fn test_link_valid_dependencies() {
@@ -295,7 +301,7 @@ mod tests {
 
         ModuleBuilder::default()
             .path(path)
-            .package(vec![package_name])
+            .package(PackageName::try_from(vec![package_name.as_ref()]).unwrap())
             .deps(dep_imports)
             .build()
             .unwrap()
