@@ -48,17 +48,16 @@ pub fn register<'src>(
     // declaration should be early on in the expression list.
     let pkg = exprs
         .iter()
-        .filter_map(|expr| {
+        .find_map(|expr| {
             if let Expr::Package(segments) = &expr.node {
                 Some(
-                    PackageName::try_from(segments.iter().copied().collect::<Vec<_>>())
+                    PackageName::try_from(segments.to_vec())
                         .expect("parser should validate package names"),
                 )
             } else {
                 None
             }
         })
-        .next()
         .expect("missing package declaration");
 
     let mut deps = Vec::new();
@@ -72,7 +71,7 @@ pub fn register<'src>(
                 deps.push(resolve_include_path(
                     include,
                     import_roots,
-                    spanned_expr.span.clone(),
+                    spanned_expr.span,
                 )?);
             }
             Expr::Enum(enm) => {
