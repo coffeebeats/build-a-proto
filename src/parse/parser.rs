@@ -539,7 +539,7 @@ fn package_name<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<Rich<
             if let Some(first) = s.chars().next() {
                 if !first.is_ascii_lowercase() {
                     emitter.emit(Rich::custom(
-                        spanned.span.into(),
+                        spanned.span,
                         PackageNameError::InvalidStart(s.to_owned()),
                     ));
                 }
@@ -547,7 +547,7 @@ fn package_name<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<Rich<
 
             if s.chars().any(|c| c.is_ascii_uppercase()) {
                 emitter.emit(Rich::custom(
-                    spanned.span.into(),
+                    spanned.span,
                     PackageNameError::InvalidCharacters(s.to_owned()),
                 ));
             }

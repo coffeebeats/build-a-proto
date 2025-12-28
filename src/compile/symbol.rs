@@ -399,7 +399,7 @@ mod tests {
 
     fn desc(package: &[&str], path: &[&str], name: &str) -> Descriptor {
         DescriptorBuilder::default()
-            .package(PackageName::try_from(package.iter().copied().collect::<Vec<_>>()).unwrap())
+            .package(PackageName::try_from(package.to_vec()).unwrap())
             .path(path.iter().map(|s| s.to_string()).collect())
             .name(name.to_string())
             .build()

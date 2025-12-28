@@ -40,8 +40,8 @@ impl Reference {
         debug_assert!(name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
 
         Self {
+            path,
             absolute: true,
-            path: path,
             name: name.to_owned(),
         }
     }
@@ -50,8 +50,8 @@ impl Reference {
     /// scope `path` and reference `name`.
     pub fn new_relative(path: Vec<String>, name: &str) -> Self {
         Self {
+            path,
             absolute: false,
-            path: path,
             name: name.to_owned(),
         }
     }
@@ -98,7 +98,7 @@ impl<'a> From<&crate::parse::Type<'a>> for Type {
                 path,
                 name,
             } => {
-                let path = path.into_iter().map(|&s| s.to_owned()).collect();
+                let path = path.iter().map(|&s| s.to_owned()).collect();
 
                 Type::Reference(if *absolute {
                     Reference::new_absolute(path, name)
