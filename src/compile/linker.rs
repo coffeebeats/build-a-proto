@@ -117,8 +117,8 @@ mod tests {
     use crate::core::DescriptorBuilder;
     use crate::core::Module;
     use crate::core::ModuleBuilder;
-    use crate::core::PackageName;
     use crate::core::registry::Kind;
+    use crate::syntax::PackageName;
 
     use super::*;
 
@@ -301,7 +301,7 @@ mod tests {
 
         ModuleBuilder::default()
             .path(path)
-            .package(PackageName::try_from(vec![package_name.as_ref()]).unwrap())
+            .package(PackageName::try_from(vec![package_name]).unwrap())
             .deps(dep_imports)
             .build()
             .unwrap()

@@ -8,7 +8,6 @@ use crate::core::Field;
 use crate::core::ImportRoot;
 use crate::core::MessageBuilder;
 use crate::core::Module;
-use crate::core::PackageName;
 use crate::core::Registry;
 use crate::core::SchemaImport;
 use crate::core::VariantKind;
@@ -16,6 +15,7 @@ use crate::core::registry;
 use crate::parse::Expr;
 use crate::parse::ParseError;
 use crate::parse::Span;
+use crate::syntax::PackageName;
 
 /* -------------------------------------------------------------------------- */
 /*                                 Fn: Prepare                                */
@@ -39,6 +39,7 @@ pub fn prepare<'a>(
             Expr::Enum(enm) => enums.push(enm),
             Expr::Message(msg) => messages.push(msg),
             Expr::Package(segments) => {
+                // NOTE: The parser has already validated the package name syntax.
                 module.package =
                     PackageName::try_from(segments.into_iter().collect::<Vec<_>>()).unwrap();
             }

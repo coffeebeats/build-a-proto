@@ -3,10 +3,11 @@ use derive_more::Display;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::syntax::PackageName;
+
 use super::Enum;
 use super::Message;
 use super::Module;
-use super::PackageName;
 
 /* -------------------------------------------------------------------------- */
 /*                              Struct: Registry                              */

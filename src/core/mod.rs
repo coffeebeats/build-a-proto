@@ -32,6 +32,8 @@ use derive_builder::Builder;
 use derive_more::Display;
 use std::path::PathBuf;
 
+use crate::syntax::PackageName;
+
 #[derive(Builder, Clone, Debug, Display)]
 #[display("Module({:?}): {:?}", self.path.as_path(), self.messages.iter().chain(self.enums.iter()).map(ToString::to_string).collect::<Vec<_>>())]
 pub struct Module {
