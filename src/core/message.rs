@@ -43,7 +43,6 @@ pub struct Field {
     pub typ: Type,
 }
 
-
 /* ----------------------------- Enum: Encoding ----------------------------- */
 
 #[derive(Clone, Debug, PartialEq)]
