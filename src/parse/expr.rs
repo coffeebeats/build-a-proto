@@ -8,9 +8,9 @@ use derive_builder::Builder;
 use crate::core::Encoding;
 use crate::syntax::Reference;
 
-use super::Span;
-use super::Spanned;
-use super::Token;
+use crate::lex::Span;
+use crate::lex::Spanned;
+use crate::lex::Token;
 
 /* -------------------------------------------------------------------------- */
 /*                                 Enum: Expr                                 */
@@ -41,12 +41,18 @@ pub enum Expr<'src> {
 impl<'src> Expr<'src> {
     /// `with_span`` is a convenience method for creating a [`Spanned`] item
     /// from the provided [`chumsky::MapExtra`] details.
-    pub(super) fn with_span<I, E>(self, info: &mut MapExtra<'src, '_, I, E>) -> Spanned<Expr<'src>>
+    pub(super) fn with_span<I, E>(
+        self,
+        info: &mut MapExtra<'src, '_, I, E>,
+    ) -> Spanned<Expr<'src>, Span>
     where
         I: ValueInput<'src, Token = Token<'src>, Span = Span>,
         E: ParserExtra<'src, I>,
     {
-        Spanned::new(self, info.span())
+        Spanned {
+            inner: self,
+            span: info.span(),
+        }
     }
 }
 

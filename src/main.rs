@@ -1,6 +1,7 @@
 mod cmd;
 mod compile;
 mod core;
+mod lex;
 mod generate;
 mod parse;
 mod syntax;

@@ -24,7 +24,7 @@ use crate::core::VariantKind;
 use crate::core::registry;
 use crate::parse::Expr;
 use crate::parse::ParseError;
-use crate::parse::Span;
+use crate::lex::Span;
 use crate::syntax::PackageName;
 
 /* -------------------------------------------------------------------------- */
@@ -35,7 +35,7 @@ pub fn prepare<'a>(
     schema_import: &'a SchemaImport,
     import_roots: &[ImportRoot],
     registry: &'a mut Registry,
-    exprs: Vec<crate::parse::Spanned<Expr<'a>>>,
+    exprs: Vec<crate::lex::Spanned<Expr<'a>, Span>>,
 ) -> Result<(), ParseError<'a>> {
     let mut enums: Vec<crate::parse::Enum> = vec![];
     let mut messages: Vec<crate::parse::Message> = vec![];
@@ -44,7 +44,7 @@ pub fn prepare<'a>(
 
     // First, inspect all expressions so all definitions can be registered.
     for spanned_expr in exprs {
-        match spanned_expr.node {
+        match spanned_expr.inner {
             Expr::Comment(_) => {} // Skip
             Expr::Enum(enm) => enums.push(enm),
             Expr::Message(msg) => messages.push(msg),
@@ -75,15 +75,15 @@ pub fn prepare<'a>(
 
         enm.variants.sort_by(|l, r| {
             let l = match l {
-                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
+                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.inner),
                 crate::parse::VariantKind::Variant(variant) => {
-                    variant.index.as_ref().map(|s| s.node)
+                    variant.index.as_ref().map(|s| s.inner)
                 }
             };
             let r = match r {
-                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.node),
+                crate::parse::VariantKind::Field(field) => field.index.as_ref().map(|s| s.inner),
                 crate::parse::VariantKind::Variant(variant) => {
-                    variant.index.as_ref().map(|s| s.node)
+                    variant.index.as_ref().map(|s| s.inner)
                 }
             };
 
@@ -93,7 +93,7 @@ pub fn prepare<'a>(
         let d = DescriptorBuilder::default()
             .package(scope.package)
             .path(scope.path)
-            .name(enm.name.node.to_owned())
+            .name(enm.name.inner.to_owned())
             .build()
             .unwrap();
 
@@ -105,7 +105,7 @@ pub fn prepare<'a>(
                     .map(str::to_owned)
                     .collect(),
             )
-            .name(enm.name.node)
+            .name(enm.name.inner)
             .variants(enm.variants.into_iter().map(VariantKind::from).collect())
             .build()
             .unwrap();
@@ -125,14 +125,14 @@ pub fn prepare<'a>(
         msg.fields.sort_by(|l, r| {
             l.index
                 .as_ref()
-                .map(|s| s.node)
-                .cmp(&r.index.as_ref().map(|s| s.node))
+                .map(|s| s.inner)
+                .cmp(&r.index.as_ref().map(|s| s.inner))
         });
 
         let d = DescriptorBuilder::default()
             .package(scope.package.clone())
             .path(scope.path.clone())
-            .name(msg.name.node.to_owned())
+            .name(msg.name.inner.to_owned())
             .build()
             .unwrap();
 
@@ -144,13 +144,13 @@ pub fn prepare<'a>(
                     .map(str::to_owned)
                     .collect(),
             )
-            .name(msg.name.node)
+            .name(msg.name.inner)
             .fields(msg.fields.into_iter().map(Field::from).collect())
             .build()
             .unwrap();
 
         let mut scope = scope.clone();
-        scope.path.push(msg.name.node.to_owned());
+        scope.path.push(msg.name.inner.to_owned());
 
         m.enums = msg
             .enums

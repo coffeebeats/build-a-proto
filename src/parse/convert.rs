@@ -47,9 +47,9 @@ impl<'a> From<Field<'a>> for core::Field {
                     .map(str::to_owned)
                     .collect(),
             )
-            .encoding(value.encoding.map(|s| s.node))
-            .name(value.name.node)
-            .index(value.index.unwrap().node)
+            .encoding(value.encoding.map(|s| s.inner))
+            .name(value.name.inner)
+            .index(value.index.unwrap().inner)
             .typ(core::Type::from(&value.typ))
             .build()
             .unwrap()
@@ -67,7 +67,7 @@ impl<'a> From<Variant<'a>> for core::Variant {
                     .map(str::to_owned)
                     .collect(),
             )
-            .name(value.name.node)
+            .name(value.name.inner)
             .build()
             .unwrap()
     }

@@ -18,9 +18,9 @@ use crate::core::SchemaImport;
 use crate::generate;
 use crate::generate::FileWriter;
 use crate::generate::generate;
-use crate::parse::LexError;
+use crate::lex::LexError;
+use crate::lex::lex;
 use crate::parse::ParseError;
-use crate::parse::lex;
 use crate::parse::parse;
 
 /* -------------------------------------------------------------------------- */

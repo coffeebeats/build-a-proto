@@ -2,11 +2,19 @@ use chumsky::error::Rich;
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::core::{Descriptor, DescriptorBuilder, ImportRoot, SchemaImport};
-use crate::parse::{Expr, ParseError, Span, Spanned};
+use crate::core::Descriptor;
+use crate::core::DescriptorBuilder;
+use crate::core::ImportRoot;
+use crate::core::SchemaImport;
+use crate::lex::Span;
+use crate::lex::Spanned;
+use crate::parse::Expr;
+use crate::parse::ParseError;
 use crate::syntax::PackageName;
 
-use super::symbol::{ModuleMetadata, Symbols, TypeKind};
+use super::symbol::ModuleMetadata;
+use super::symbol::Symbols;
+use super::symbol::TypeKind;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Context                              */
@@ -49,7 +57,7 @@ pub fn register<'src>(
     let pkg = exprs
         .iter()
         .find_map(|expr| {
-            if let Expr::Package(segments) = &expr.node {
+            if let Expr::Package(segments) = &expr.inner {
                 Some(
                     PackageName::try_from(segments.to_vec())
                         .expect("parser should validate package names"),
@@ -64,7 +72,7 @@ pub fn register<'src>(
     let mut type_descriptors = Vec::new();
 
     for spanned_expr in &exprs {
-        match &spanned_expr.node {
+        match &spanned_expr.inner {
             Expr::Comment(_) => {}        // Skip comments
             Expr::Package(segments) => {} // Already processed
             Expr::Include(include) => {
@@ -75,7 +83,7 @@ pub fn register<'src>(
                 )?);
             }
             Expr::Enum(enm) => {
-                let descriptor = build_descriptor(&pkg, &[], enm.name.node);
+                let descriptor = build_descriptor(&pkg, &[], enm.name.inner);
                 ctx.symbols
                     .insert_type(descriptor.clone(), TypeKind::Variant);
                 type_descriptors.push(descriptor);
@@ -83,12 +91,12 @@ pub fn register<'src>(
                 // TODO: Register nested enums (if we support them in the future)
             }
             Expr::Message(msg) => {
-                let descriptor = build_descriptor(&pkg, &[], msg.name.node);
+                let descriptor = build_descriptor(&pkg, &[], msg.name.inner);
                 ctx.symbols
                     .insert_type(descriptor.clone(), TypeKind::Message);
                 type_descriptors.push(descriptor.clone());
 
-                register_nested_types(&mut ctx.symbols, &pkg, &[msg.name.node], msg);
+                register_nested_types(&mut ctx.symbols, &pkg, &[msg.name.inner], msg);
             }
             _ => unreachable!(
                 "parser should only produce Package, Include, Enum, Message, or Comment"
@@ -119,15 +127,15 @@ fn register_nested_types<'src>(
 ) {
     for enm in &msg.enums {
         let mut nested_path = path.to_vec();
-        nested_path.push(enm.name.node);
-        let descriptor = build_descriptor(package, path, enm.name.node);
+        nested_path.push(enm.name.inner);
+        let descriptor = build_descriptor(package, path, enm.name.inner);
         symbols.insert_type(descriptor, TypeKind::Variant);
     }
 
     for nested_msg in &msg.messages {
         let mut nested_path = path.to_vec();
-        nested_path.push(nested_msg.name.node);
-        let descriptor = build_descriptor(package, path, nested_msg.name.node);
+        nested_path.push(nested_msg.name.inner);
+        let descriptor = build_descriptor(package, path, nested_msg.name.inner);
         symbols.insert_type(descriptor, TypeKind::Message);
 
         register_nested_types(symbols, package, &nested_path, nested_msg);
