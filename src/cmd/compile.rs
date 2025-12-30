@@ -18,9 +18,7 @@ use crate::core::SchemaImport;
 use crate::generate;
 use crate::generate::FileWriter;
 use crate::generate::generate;
-use crate::lex::LexError;
 use crate::lex::lex;
-use crate::parse::ParseError;
 use crate::parse::parse;
 
 /* -------------------------------------------------------------------------- */
@@ -82,6 +80,7 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
 
     let import_roots = parse_import_roots(args.import_roots)?;
 
+    let mut failed: Vec<PathBuf> = vec![];
     while !files.is_empty() {
         let schema_import = files.pop_front().unwrap();
 
@@ -101,22 +100,28 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
         let contents = std::fs::read_to_string(path).map_err(|e| anyhow!(e))?;
 
         let (tokens, lex_errs) = lex(&contents);
-        let mut parse_errs = vec![];
+        for err in lex_errs {
+            report_error(path, &contents, err.map_token(|t| t.to_string()));
+        }
+
+        let mut parse_succeeded = true;
 
         if let Some(tokens) = tokens.as_ref() {
-            let (exprs, errs) = parse(tokens, contents.len());
-            parse_errs = errs;
+            let result = parse(tokens, contents.len());
+            for err in result.errors {
+                report_error(path, &contents, err.map_token(|t| t.to_string()));
+            }
 
-            if let Some(exprs) = exprs {
-                if let Err(err) = prepare(&schema_import, &import_roots, &mut reg, exprs) {
-                    parse_errs.push(err);
+            if let Some(ast) = result.ast {
+                if let Err(err) = prepare(&schema_import, &import_roots, &mut reg, &ast) {
+                    report_error(path, &contents, err.map_token(|t| t.to_string()));
+                    parse_succeeded = false;
                 }
             }
         }
 
-        if !lex_errs.is_empty() || !parse_errs.is_empty() {
-            report_errors(path.to_str().unwrap(), &contents, lex_errs, parse_errs);
-            return Err(anyhow!("Failed to parse file: {:?}", path));
+        if !parse_succeeded {
+            failed.push(path.to_path_buf());
         }
 
         // Queue imported modules for processing.
@@ -142,41 +147,41 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
         generate(out_dir, &mut reg, &mut gdscript)?;
     }
 
-    Ok(())
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!("Failed to parse files: {:?}", failed))
+    }
 }
 
-fn report_errors<'a>(
-    path: &str,
-    contents: &str,
-    lex_errs: Vec<LexError<'a>>,
-    parse_errs: Vec<ParseError<'a>>,
-) {
-    lex_errs
-        .into_iter()
-        .map(|e| e.map_token(|c| c.to_string()))
-        .chain(
-            parse_errs
-                .into_iter()
-                .map(|e| e.map_token(|t| t.to_string())),
-        )
-        .for_each(|e| {
-            Report::build(ReportKind::Error, (path.to_owned(), e.span().into_range()))
-                .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-                .with_message(e.to_string())
-                .with_label(
-                    Label::new((path.to_owned(), e.span().into_range()))
-                        .with_message(e.reason().to_string())
-                        .with_color(Color::Red),
-                )
-                .with_labels(e.contexts().map(|(label, span)| {
-                    Label::new((path.to_owned(), span.into_range()))
-                        .with_message(format!("while parsing this {:?}", label))
-                        .with_color(Color::Yellow)
-                }))
-                .finish()
-                .print(sources([(path.to_owned(), contents.to_owned())]))
-                .unwrap()
-        });
+/* ---------------------------- Fn: report_error ---------------------------- */
+
+fn report_error<'a, T, U>(path: T, contents: U, error: chumsky::error::Rich<'a, String>)
+where
+    T: AsRef<Path>,
+    U: AsRef<str>,
+{
+    let location = path.as_ref().display().to_string();
+
+    Report::build(
+        ReportKind::Error,
+        (location.clone(), error.span().into_range()),
+    )
+    .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+    .with_message(error.to_string())
+    .with_label(
+        Label::new((location.clone(), error.span().into_range()))
+            .with_message(error.reason().to_string())
+            .with_color(Color::Red),
+    )
+    .with_labels(error.contexts().map(|(label, span)| {
+        Label::new((location.clone(), span.into_range()))
+            .with_message(format!("while parsing this {:?}", label))
+            .with_color(Color::Yellow)
+    }))
+    .finish()
+    .print(sources([(location.clone(), contents.as_ref())]))
+    .unwrap();
 }
 
 /* ---------------------------- Fn: parse_out_dir --------------------------- */
