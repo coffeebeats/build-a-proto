@@ -1,5 +1,6 @@
+use std::fmt;
+
 use derive_builder::Builder;
-use derive_more::Display;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -9,8 +10,7 @@ use super::PackageName;
 /*                             Struct: Descriptor                             */
 /* -------------------------------------------------------------------------- */
 
-#[derive(Builder, Clone, Debug, Deserialize, Display, PartialEq, Eq, Hash, Serialize)]
-#[display("{}", String::from(self))]
+#[derive(Builder, Clone, Debug, Deserialize, PartialEq, Eq, Hash, Serialize)]
 pub struct Descriptor {
     pub package: PackageName,
     #[builder(default)]
@@ -19,22 +19,20 @@ pub struct Descriptor {
     pub name: Option<String>,
 }
 
-/* --------------------------- Impl: Into<String> --------------------------- */
+/* ------------------------------ Impl: Display ----------------------------- */
 
-impl From<&Descriptor> for String {
-    fn from(value: &Descriptor) -> Self {
-        let name = value.name.as_deref().unwrap_or("");
-        let pkg = value.package.to_string();
-        let path = if !value.path.is_empty() {
-            value.path.join(".")
-        } else {
-            "".to_owned()
-        };
+impl fmt::Display for Descriptor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.package)?;
 
-        vec![pkg.as_str(), path.as_str(), name]
-            .into_iter()
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<&str>>()
-            .join(".")
+        if !self.path.is_empty() {
+            write!(f, ".{}", self.path.join("."))?;
+        }
+
+        if let Some(name) = &self.name {
+            write!(f, ".{}", name)?;
+        }
+
+        Ok(())
     }
 }
