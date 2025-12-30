@@ -14,14 +14,16 @@ use crate::core::Encoding;
 use crate::syntax::PackageNameError;
 use crate::syntax::Reference;
 
+use crate::lex::Keyword;
+use crate::lex::Span;
+use crate::lex::Spanned;
+use crate::lex::Token;
+use crate::lex::spanned;
+
 use super::Enum;
 use super::Expr;
 use super::Field;
-use super::Keyword;
 use super::Message;
-use super::Span;
-use super::Spanned;
-use super::Token;
 use super::Type;
 use super::TypeKind;
 use super::Variant;
@@ -61,7 +63,7 @@ pub fn parse<'src>(
 ) -> (Option<Vec<Spanned<Expr<'src>>>>, Vec<ParseError<'src>>) {
     parser()
         .parse(input.as_slice().map(Span::from(size..size), |spanned| {
-            (&spanned.node, &spanned.span)
+            (&spanned.inner, &spanned.span)
         }))
         .into_output_errors()
 }
@@ -96,7 +98,7 @@ where
             },
         )
         .map(Expr::Package)
-        .map_with(Expr::with_span)
+        .map_with(spanned)
         .labelled("package")
         .boxed();
 
@@ -118,7 +120,7 @@ where
             },
         )
         .map(Expr::Include)
-        .map_with(Expr::with_span)
+        .map_with(spanned)
         .labelled("include")
         .boxed();
 
@@ -155,7 +157,7 @@ where
         .then(
             ident
                 // TODO: Add support for segment-specific error-reporting/spans.
-                // .map_with(|id, e| Spanned::new(id, e.span()))
+                // .map_with(|id, e| Spanned { inner: id, span: e.span() })
                 .separated_by(just(Token::Dot))
                 .at_least(1)
                 .collect::<Vec<_>>(),
@@ -269,10 +271,10 @@ where
     let variant = (doc_comment.clone().or_not())
         .then(
             uint.then_ignore(just(Token::Colon))
-                .map_with(|idx, e| Spanned::new(idx, e.span()))
+                .map_with(spanned)
                 .or_not(),
         )
-        .then(ident.map_with(|name, e| Spanned::new(name, e.span())))
+        .then(ident.map_with(spanned))
         .then_ignore(just(Token::Semicolon))
         .map_with(|((comment, index), name), e| {
             Expr::Variant(Variant {
@@ -288,11 +290,11 @@ where
     let field = (doc_comment.clone().or_not())
         .then(
             uint.then_ignore(just(Token::Colon))
-                .map_with(|idx, e| Spanned::new(idx, e.span()))
+                .map_with(spanned)
                 .or_not(),
         )
         .then(typ)
-        .then(ident.map_with(|name, e| Spanned::new(name, e.span())))
+        .then(ident.map_with(spanned))
         .then(
             just(Token::Equal)
                 .ignore_then(choice((
@@ -308,7 +310,7 @@ where
                             just(Token::ListClose),
                         ),
                 )))
-                .map_with(|enc, e| Spanned::new(enc, e.span()))
+                .map_with(spanned)
                 .or_not(),
         )
         .then_ignore(just(Token::Semicolon))
@@ -328,10 +330,7 @@ where
     let enumeration = doc_comment
         .clone()
         .or_not()
-        .then(
-            just(Token::Keyword(Keyword::Enum))
-                .ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))),
-        )
+        .then(just(Token::Keyword(Keyword::Enum)).ignore_then(ident.map_with(spanned)))
         .then_ignore(
             choice((
                 inline_comment.clone(),
@@ -377,10 +376,7 @@ where
     let message = recursive(|msg| {
         doc_comment
             .or_not()
-            .then(
-                just(Token::Keyword(Keyword::Message))
-                    .ignore_then(ident.map_with(|name, e| Spanned::new(name, e.span()))),
-            )
+            .then(just(Token::Keyword(Keyword::Message)).ignore_then(ident.map_with(spanned)))
             .then_ignore(
                 choice((
                     inline_comment,
@@ -441,7 +437,7 @@ where
     // Leading content: newlines and line comments before package declaration.
     let leading = choice((
         just(Token::Newline).to(None),
-        line_comment.clone().map_with(Expr::with_span).map(Some),
+        line_comment.clone().map_with(spanned).map(Some),
     ))
     .repeated()
     .collect::<Vec<_>>()
@@ -452,23 +448,20 @@ where
         choice((
             just(Token::Newline).to(None),
             include.map(Some),
-            line_comment.clone().map_with(Expr::with_span).map(Some),
+            line_comment.clone().map_with(spanned).map(Some),
         ))
         .repeated()
         .collect::<Vec<_>>()
         .map(|v| v.into_iter().flatten().collect::<Vec<_>>()),
     );
 
-    let declaration = choice((
-        message.map_with(Expr::with_span),
-        enumeration.map_with(Expr::with_span),
-    ))
-    .recover_with(skip_then_retry_until(any().ignored(), end()));
+    let declaration = choice((message.map_with(spanned), enumeration.map_with(spanned)))
+        .recover_with(skip_then_retry_until(any().ignored(), end()));
 
     let declarations = choice((
         just(Token::Newline).to(None),
         declaration.map(Some),
-        line_comment.map_with(Expr::with_span).map(Some),
+        line_comment.map_with(spanned).map(Some),
     ))
     .repeated()
     .collect::<Vec<_>>()
@@ -532,29 +525,30 @@ fn import_path<'a>() -> impl Parser<'a, &'a str, PathBuf, extra::Err<Rich<'a, ch
 
 /// Parses a package name string into a vector of segments.
 fn package_name<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<Rich<'a, char>>> {
-    let segment = ident()
-        .map_with(|s: &'a str, e| Spanned::new(s, e.span()))
-        .validate(|spanned, _info, emitter| {
-            let s = spanned.node;
+    let segment =
+        ident()
+            .map_with(|s: &'a str, e| spanned(s, e))
+            .validate(|spanned, _info, emitter| {
+                let s = spanned.inner;
 
-            if let Some(first) = s.chars().next() {
-                if !first.is_ascii_lowercase() {
+                if let Some(first) = s.chars().next() {
+                    if !first.is_ascii_lowercase() {
+                        emitter.emit(Rich::custom(
+                            spanned.span,
+                            PackageNameError::InvalidStart(s.to_owned()),
+                        ));
+                    }
+                }
+
+                if s.chars().any(|c| c.is_ascii_uppercase()) {
                     emitter.emit(Rich::custom(
                         spanned.span,
-                        PackageNameError::InvalidStart(s.to_owned()),
+                        PackageNameError::InvalidCharacters(s.to_owned()),
                     ));
                 }
-            }
 
-            if s.chars().any(|c| c.is_ascii_uppercase()) {
-                emitter.emit(Rich::custom(
-                    spanned.span,
-                    PackageNameError::InvalidCharacters(s.to_owned()),
-                ));
-            }
-
-            s
-        });
+                s
+            });
 
     segment
         .separated_by(just('.'))
@@ -584,8 +578,8 @@ fn check_field_names<'src, I, Ex>(
 
     for expr in fields.iter_mut() {
         let target: &'src str = match expr {
-            Expr::Field(f) => f.name.node,
-            Expr::Variant(v) => v.name.node,
+            Expr::Field(f) => f.name.inner,
+            Expr::Variant(v) => v.name.inner,
             _ => continue,
         };
 
@@ -630,7 +624,7 @@ fn set_field_indices<'src, I, Ex>(
 
         match target {
             Some(spanned_index) => {
-                let value = spanned_index.node;
+                let value = spanned_index.inner;
 
                 if value >= indices.len() {
                     emitter.emit(Rich::custom(
@@ -657,7 +651,12 @@ fn set_field_indices<'src, I, Ex>(
                 debug_assert!(next_index.is_some());
 
                 if let Some(value) = next_index {
-                    let _ = target.insert(Spanned::new(value, field_span));
+                    // Note: We can't use spanned() here because we need to construct
+                    // a Spanned value without MapExtra context
+                    let _ = target.insert(Spanned {
+                        inner: value,
+                        span: field_span,
+                    });
                     indices[value] = Some(());
                 }
             }
@@ -723,12 +722,18 @@ mod tests {
 
         // Then: The output expression list matches expectations.
         let exprs = vec![
-            Spanned::new(Expr::Package(vec!["abc", "def"]), Span::from(1..4)),
-            Spanned::new(
-                Expr::Include(PathBuf::from("a/b/c.baproto")),
-                Span::from(6..9),
-            ),
-            Spanned::new(Expr::Include(PathBuf::from("d.baproto")), Span::from(9..12)),
+            Spanned {
+                inner: Expr::Package(vec!["abc", "def"]),
+                span: Span::from(1..4),
+            },
+            Spanned {
+                inner: Expr::Include(PathBuf::from("a/b/c.baproto")),
+                span: Span::from(6..9),
+            },
+            Spanned {
+                inner: Expr::Include(PathBuf::from("d.baproto")),
+                span: Span::from(9..12),
+            },
         ];
         assert_eq!(output.output(), Some(&exprs));
     }
@@ -908,28 +913,40 @@ mod tests {
         // Then: The output expression list matches expectations.
         use super::TypeKind;
         let exprs = vec![
-            Spanned::new(Expr::Package(vec!["test"]), Span::from(0..3)),
-            Spanned::new(
-                MessageBuilder::default()
+            Spanned {
+                inner: Expr::Package(vec!["test"]),
+                span: Span::from(0..3),
+            },
+            Spanned {
+                inner: MessageBuilder::default()
                     .span(Span::from(4..16))
-                    .name(Spanned::new("Message", Span::from(5..6)))
+                    .name(Spanned {
+                        inner: "Message",
+                        span: Span::from(5..6),
+                    })
                     .fields(vec![
                         FieldBuilder::default()
                             .span(Span::from(11..14))
-                            .name(Spanned::new("sequence_id", Span::from(12..13)))
+                            .name(Spanned {
+                                inner: "sequence_id",
+                                span: Span::from(12..13),
+                            })
                             .typ(Type {
                                 kind: TypeKind::UnsignedInt8,
                                 span: Span::from(11..12),
                             })
-                            .index(Spanned::new(0, Span::from(11..14)))
+                            .index(Spanned {
+                                inner: 0,
+                                span: Span::from(11..14),
+                            })
                             .build()
                             .unwrap(),
                     ])
                     .build()
                     .unwrap()
                     .into(),
-                Span::from(4..16),
-            ),
+                span: Span::from(4..16),
+            },
         ];
         assert_eq!(output.output(), Some(&exprs));
     }
@@ -968,7 +985,7 @@ mod tests {
         );
 
         let exprs = output.output().unwrap();
-        let Expr::Message(msg) = &exprs[1].node else {
+        let Expr::Message(msg) = &exprs[1].inner else {
             panic!("Expected Message");
         };
 
@@ -1016,7 +1033,7 @@ mod tests {
         );
 
         let exprs = output.output().unwrap();
-        let Expr::Message(msg) = &exprs[1].node else {
+        let Expr::Message(msg) = &exprs[1].inner else {
             panic!("Expected Message");
         };
 
