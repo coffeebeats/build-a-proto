@@ -1,3 +1,4 @@
+pub mod descriptor;
 pub mod enumeration;
 pub mod message;
 pub mod package;
@@ -5,6 +6,10 @@ pub mod path;
 pub mod reference;
 pub mod registry;
 pub mod types;
+
+/* ----------------------------- Mod: Descriptor ---------------------------- */
+
+pub use descriptor::*;
 
 /* ---------------------------- Mod: Enumeration ---------------------------- */
 
