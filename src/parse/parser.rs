@@ -18,6 +18,7 @@ use crate::lex::Keyword;
 use crate::lex::Span;
 use crate::lex::Spanned;
 use crate::lex::Token;
+use crate::lex::spanned;
 
 use super::Enum;
 use super::Expr;
@@ -97,7 +98,7 @@ where
             },
         )
         .map(Expr::Package)
-        .map_with(Expr::with_span)
+        .map_with(spanned)
         .labelled("package")
         .boxed();
 
@@ -119,7 +120,7 @@ where
             },
         )
         .map(Expr::Include)
-        .map_with(Expr::with_span)
+        .map_with(spanned)
         .labelled("include")
         .boxed();
 
@@ -270,16 +271,10 @@ where
     let variant = (doc_comment.clone().or_not())
         .then(
             uint.then_ignore(just(Token::Colon))
-                .map_with(|idx, e| Spanned {
-                    inner: idx,
-                    span: e.span(),
-                })
+                .map_with(spanned)
                 .or_not(),
         )
-        .then(ident.map_with(|name, e| Spanned {
-            inner: name,
-            span: e.span(),
-        }))
+        .then(ident.map_with(spanned))
         .then_ignore(just(Token::Semicolon))
         .map_with(|((comment, index), name), e| {
             Expr::Variant(Variant {
@@ -295,17 +290,11 @@ where
     let field = (doc_comment.clone().or_not())
         .then(
             uint.then_ignore(just(Token::Colon))
-                .map_with(|idx, e| Spanned {
-                    inner: idx,
-                    span: e.span(),
-                })
+                .map_with(spanned)
                 .or_not(),
         )
         .then(typ)
-        .then(ident.map_with(|name, e| Spanned {
-            inner: name,
-            span: e.span(),
-        }))
+        .then(ident.map_with(spanned))
         .then(
             just(Token::Equal)
                 .ignore_then(choice((
@@ -321,10 +310,7 @@ where
                             just(Token::ListClose),
                         ),
                 )))
-                .map_with(|enc, e| Spanned {
-                    inner: enc,
-                    span: e.span(),
-                })
+                .map_with(spanned)
                 .or_not(),
         )
         .then_ignore(just(Token::Semicolon))
@@ -345,10 +331,7 @@ where
         .clone()
         .or_not()
         .then(
-            just(Token::Keyword(Keyword::Enum)).ignore_then(ident.map_with(|name, e| Spanned {
-                inner: name,
-                span: e.span(),
-            })),
+            just(Token::Keyword(Keyword::Enum)).ignore_then(ident.map_with(spanned)),
         )
         .then_ignore(
             choice((
@@ -396,12 +379,7 @@ where
         doc_comment
             .or_not()
             .then(
-                just(Token::Keyword(Keyword::Message)).ignore_then(ident.map_with(|name, e| {
-                    Spanned {
-                        inner: name,
-                        span: e.span(),
-                    }
-                })),
+                just(Token::Keyword(Keyword::Message)).ignore_then(ident.map_with(spanned)),
             )
             .then_ignore(
                 choice((
@@ -463,7 +441,7 @@ where
     // Leading content: newlines and line comments before package declaration.
     let leading = choice((
         just(Token::Newline).to(None),
-        line_comment.clone().map_with(Expr::with_span).map(Some),
+        line_comment.clone().map_with(spanned).map(Some),
     ))
     .repeated()
     .collect::<Vec<_>>()
@@ -474,7 +452,7 @@ where
         choice((
             just(Token::Newline).to(None),
             include.map(Some),
-            line_comment.clone().map_with(Expr::with_span).map(Some),
+            line_comment.clone().map_with(spanned).map(Some),
         ))
         .repeated()
         .collect::<Vec<_>>()
@@ -482,15 +460,15 @@ where
     );
 
     let declaration = choice((
-        message.map_with(Expr::with_span),
-        enumeration.map_with(Expr::with_span),
+        message.map_with(spanned),
+        enumeration.map_with(spanned),
     ))
     .recover_with(skip_then_retry_until(any().ignored(), end()));
 
     let declarations = choice((
         just(Token::Newline).to(None),
         declaration.map(Some),
-        line_comment.map_with(Expr::with_span).map(Some),
+        line_comment.map_with(spanned).map(Some),
     ))
     .repeated()
     .collect::<Vec<_>>()
@@ -555,10 +533,7 @@ fn import_path<'a>() -> impl Parser<'a, &'a str, PathBuf, extra::Err<Rich<'a, ch
 /// Parses a package name string into a vector of segments.
 fn package_name<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<Rich<'a, char>>> {
     let segment = ident()
-        .map_with(|s: &'a str, e| Spanned {
-            inner: s,
-            span: e.span(),
-        })
+        .map_with(|s: &'a str, e| spanned(s, e))
         .validate(|spanned, _info, emitter| {
             let s = spanned.inner;
 
@@ -682,6 +657,8 @@ fn set_field_indices<'src, I, Ex>(
                 debug_assert!(next_index.is_some());
 
                 if let Some(value) = next_index {
+                    // Note: We can't use spanned() here because we need to construct
+                    // a Spanned value without MapExtra context
                     let _ = target.insert(Spanned {
                         inner: value,
                         span: field_span,

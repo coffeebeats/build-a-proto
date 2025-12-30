@@ -1,8 +1,5 @@
 use std::path::PathBuf;
 
-use chumsky::extra::ParserExtra;
-use chumsky::input::MapExtra;
-use chumsky::input::ValueInput;
 use derive_builder::Builder;
 
 use crate::core::Encoding;
@@ -34,26 +31,6 @@ pub enum Expr<'src> {
     // Definitions
     Message(Message<'src>),
     Enum(Enum<'src>),
-}
-
-/* ----------------------------- Impl: with_span ---------------------------- */
-
-impl<'src> Expr<'src> {
-    /// `with_span`` is a convenience method for creating a [`Spanned`] item
-    /// from the provided [`chumsky::MapExtra`] details.
-    pub(super) fn with_span<I, E>(
-        self,
-        info: &mut MapExtra<'src, '_, I, E>,
-    ) -> Spanned<Expr<'src>, Span>
-    where
-        I: ValueInput<'src, Token = Token<'src>, Span = Span>,
-        E: ParserExtra<'src, I>,
-    {
-        Spanned {
-            inner: self,
-            span: info.span(),
-        }
-    }
 }
 
 /* --------------------------- Impl: From<Message> -------------------------- */

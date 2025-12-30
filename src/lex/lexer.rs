@@ -9,6 +9,7 @@ use super::Keyword;
 use super::Span;
 use super::Spanned;
 use super::Token;
+use super::spanned;
 
 /* -------------------------------------------------------------------------- */
 /*                                   Fn: Lex                                  */
@@ -18,7 +19,9 @@ use super::Token;
 pub type LexError<'src> = Rich<'src, char>;
 
 /// `lex` lexes an input string into [`Token`]s recognized by the parser.
-pub fn lex<'src>(input: &'src str) -> (Option<Vec<Spanned<Token<'src>, Span>>>, Vec<LexError<'src>>) {
+pub fn lex<'src>(
+    input: &'src str,
+) -> (Option<Vec<Spanned<Token<'src>, Span>>>, Vec<LexError<'src>>) {
     lexer().parse(input).into_output_errors()
 }
 
@@ -43,7 +46,7 @@ fn lexer<'src>()
         just('}').map(|_| Token::BlockClose),
         just('=').map(|_| Token::Equal),
     ))
-    .map_with(Token::with_span);
+    .map_with(spanned);
 
     let keyword = choice((
         just("encoding").map(|_| Token::Keyword(Keyword::Encoding)),
@@ -52,14 +55,14 @@ fn lexer<'src>()
         just("message").map(|_| Token::Keyword(Keyword::Message)),
         just("package").map(|_| Token::Keyword(Keyword::Package)),
     ))
-    .map_with(Token::with_span)
+    .map_with(spanned)
     .labelled("keyword");
 
     // Whitespace
 
     let line_break = newline()
         .map(|_| Token::Newline)
-        .map_with(Token::with_span)
+        .map_with(spanned)
         .labelled("line break");
 
     // Input
@@ -67,7 +70,7 @@ fn lexer<'src>()
     let uint = chumsky::text::int(10).from_str().validate(
         |result: Result<usize, ParseIntError>, info, emitter| {
             if let Ok(value) = result {
-                return Token::Uint(value).with_span(info);
+                return spanned(Token::Uint(value), info);
             }
 
             let msg = match result.unwrap_err().kind() {
@@ -79,7 +82,7 @@ fn lexer<'src>()
 
             emitter.emit(Rich::custom(info.span(), msg));
 
-            Token::Invalid(info.slice()).with_span(info)
+            spanned(Token::Invalid(info.slice()), info)
         },
     );
 
@@ -93,10 +96,10 @@ fn lexer<'src>()
                 let msg = "invalid input: strings cannot contain line breaks";
                 emitter.emit(Rich::custom(info.span(), msg));
 
-                return Token::Invalid(info.slice()).with_span(info);
+                return spanned(Token::Invalid(info.slice()), info);
             }
 
-            Token::String(input).with_span(info)
+            spanned(Token::String(input), info)
         })
         .delimited_by(quote, quote);
 
@@ -106,13 +109,10 @@ fn lexer<'src>()
             .repeated()
             .to_slice()
             .map(Token::Comment)
-            .map_with(Token::with_span),
+            .map_with(spanned),
     );
 
-    let identifier = ident()
-        .to_slice()
-        .map(Token::Ident)
-        .map_with(Token::with_span);
+    let identifier = ident().to_slice().map(Token::Ident).map_with(spanned);
 
     let missing = empty().then(end()).validate(|_, info, emitter| {
         emitter.emit(Rich::custom(info.span(), "missing input"));
@@ -175,8 +175,14 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Keyword(Keyword::Package), span: Span::from(0..7) },
-            Spanned { inner: Token::String("abc.def"), span: Span::from(9..16) },
+            Spanned {
+                inner: Token::Keyword(Keyword::Package),
+                span: Span::from(0..7),
+            },
+            Spanned {
+                inner: Token::String("abc.def"),
+                span: Span::from(9..16),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -194,8 +200,14 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Keyword(Keyword::Include), span: Span::from(0..7) },
-            Spanned { inner: Token::String("foo/bar/baz.baproto"), span: Span::from(9..28) },
+            Spanned {
+                inner: Token::Keyword(Keyword::Include),
+                span: Span::from(0..7),
+            },
+            Spanned {
+                inner: Token::String("foo/bar/baz.baproto"),
+                span: Span::from(9..28),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -232,11 +244,26 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Keyword(Keyword::Enum), span: Span::from(0..4) },
-            Spanned { inner: Token::Ident("SomeEnum"), span: Span::from(5..13) },
-            Spanned { inner: Token::BlockOpen, span: Span::from(14..15) },
-            Spanned { inner: Token::Newline, span: Span::from(16..17) },
-            Spanned { inner: Token::BlockClose, span: Span::from(18..19) },
+            Spanned {
+                inner: Token::Keyword(Keyword::Enum),
+                span: Span::from(0..4),
+            },
+            Spanned {
+                inner: Token::Ident("SomeEnum"),
+                span: Span::from(5..13),
+            },
+            Spanned {
+                inner: Token::BlockOpen,
+                span: Span::from(14..15),
+            },
+            Spanned {
+                inner: Token::Newline,
+                span: Span::from(16..17),
+            },
+            Spanned {
+                inner: Token::BlockClose,
+                span: Span::from(18..19),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -254,11 +281,26 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Keyword(Keyword::Message), span: Span::from(0..7) },
-            Spanned { inner: Token::Ident("SomeMessage"), span: Span::from(8..19) },
-            Spanned { inner: Token::BlockOpen, span: Span::from(20..21) },
-            Spanned { inner: Token::Newline, span: Span::from(22..23) },
-            Spanned { inner: Token::BlockClose, span: Span::from(24..25) },
+            Spanned {
+                inner: Token::Keyword(Keyword::Message),
+                span: Span::from(0..7),
+            },
+            Spanned {
+                inner: Token::Ident("SomeMessage"),
+                span: Span::from(8..19),
+            },
+            Spanned {
+                inner: Token::BlockOpen,
+                span: Span::from(20..21),
+            },
+            Spanned {
+                inner: Token::Newline,
+                span: Span::from(22..23),
+            },
+            Spanned {
+                inner: Token::BlockClose,
+                span: Span::from(24..25),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -276,8 +318,14 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Ident("VARIANT_1"), span: Span::from(0..9) },
-            Spanned { inner: Token::Semicolon, span: Span::from(9..10) },
+            Spanned {
+                inner: Token::Ident("VARIANT_1"),
+                span: Span::from(0..9),
+            },
+            Spanned {
+                inner: Token::Semicolon,
+                span: Span::from(9..10),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -295,10 +343,22 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Uint(0), span: Span::from(0..1) },
-            Spanned { inner: Token::Colon, span: Span::from(1..2) },
-            Spanned { inner: Token::Ident("VARIANT_1"), span: Span::from(3..12) },
-            Spanned { inner: Token::Semicolon, span: Span::from(12..13) },
+            Spanned {
+                inner: Token::Uint(0),
+                span: Span::from(0..1),
+            },
+            Spanned {
+                inner: Token::Colon,
+                span: Span::from(1..2),
+            },
+            Spanned {
+                inner: Token::Ident("VARIANT_1"),
+                span: Span::from(3..12),
+            },
+            Spanned {
+                inner: Token::Semicolon,
+                span: Span::from(12..13),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -316,12 +376,30 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::ListOpen, span: Span::from(0..1) },
-            Spanned { inner: Token::Ident("key"), span: Span::from(1..4) },
-            Spanned { inner: Token::ListClose, span: Span::from(4..5) },
-            Spanned { inner: Token::Ident("value"), span: Span::from(5..10) },
-            Spanned { inner: Token::Ident("array_field"), span: Span::from(11..22) },
-            Spanned { inner: Token::Semicolon, span: Span::from(22..23) },
+            Spanned {
+                inner: Token::ListOpen,
+                span: Span::from(0..1),
+            },
+            Spanned {
+                inner: Token::Ident("key"),
+                span: Span::from(1..4),
+            },
+            Spanned {
+                inner: Token::ListClose,
+                span: Span::from(4..5),
+            },
+            Spanned {
+                inner: Token::Ident("value"),
+                span: Span::from(5..10),
+            },
+            Spanned {
+                inner: Token::Ident("array_field"),
+                span: Span::from(11..22),
+            },
+            Spanned {
+                inner: Token::Semicolon,
+                span: Span::from(22..23),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -339,14 +417,38 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Uint(1), span: Span::from(0..1) },
-            Spanned { inner: Token::Colon, span: Span::from(1..2) },
-            Spanned { inner: Token::ListOpen, span: Span::from(3..4) },
-            Spanned { inner: Token::Ident("key"), span: Span::from(4..7) },
-            Spanned { inner: Token::ListClose, span: Span::from(7..8) },
-            Spanned { inner: Token::Ident("value"), span: Span::from(8..13) },
-            Spanned { inner: Token::Ident("array_field"), span: Span::from(14..25) },
-            Spanned { inner: Token::Semicolon, span: Span::from(25..26) },
+            Spanned {
+                inner: Token::Uint(1),
+                span: Span::from(0..1),
+            },
+            Spanned {
+                inner: Token::Colon,
+                span: Span::from(1..2),
+            },
+            Spanned {
+                inner: Token::ListOpen,
+                span: Span::from(3..4),
+            },
+            Spanned {
+                inner: Token::Ident("key"),
+                span: Span::from(4..7),
+            },
+            Spanned {
+                inner: Token::ListClose,
+                span: Span::from(7..8),
+            },
+            Spanned {
+                inner: Token::Ident("value"),
+                span: Span::from(8..13),
+            },
+            Spanned {
+                inner: Token::Ident("array_field"),
+                span: Span::from(14..25),
+            },
+            Spanned {
+                inner: Token::Semicolon,
+                span: Span::from(25..26),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
@@ -364,21 +466,66 @@ mod tests {
 
         // Then: The output token list matches expectations.
         let tokens = vec![
-            Spanned { inner: Token::Ident("u8"), span: Span::from(0..2) },
-            Spanned { inner: Token::Ident("array_field"), span: Span::from(3..14) },
-            Spanned { inner: Token::Equal, span: Span::from(15..16) },
-            Spanned { inner: Token::ListOpen, span: Span::from(17..18) },
-            Spanned { inner: Token::Ident("delta"), span: Span::from(18..23) },
-            Spanned { inner: Token::Comma, span: Span::from(23..24) },
-            Spanned { inner: Token::Ident("bits"), span: Span::from(25..29) },
-            Spanned { inner: Token::FnOpen, span: Span::from(29..30) },
-            Spanned { inner: Token::Ident("var"), span: Span::from(30..33) },
-            Spanned { inner: Token::FnOpen, span: Span::from(33..34) },
-            Spanned { inner: Token::Uint(8), span: Span::from(34..35) },
-            Spanned { inner: Token::FnClose, span: Span::from(35..36) },
-            Spanned { inner: Token::FnClose, span: Span::from(36..37) },
-            Spanned { inner: Token::ListClose, span: Span::from(37..38) },
-            Spanned { inner: Token::Semicolon, span: Span::from(38..39) },
+            Spanned {
+                inner: Token::Ident("u8"),
+                span: Span::from(0..2),
+            },
+            Spanned {
+                inner: Token::Ident("array_field"),
+                span: Span::from(3..14),
+            },
+            Spanned {
+                inner: Token::Equal,
+                span: Span::from(15..16),
+            },
+            Spanned {
+                inner: Token::ListOpen,
+                span: Span::from(17..18),
+            },
+            Spanned {
+                inner: Token::Ident("delta"),
+                span: Span::from(18..23),
+            },
+            Spanned {
+                inner: Token::Comma,
+                span: Span::from(23..24),
+            },
+            Spanned {
+                inner: Token::Ident("bits"),
+                span: Span::from(25..29),
+            },
+            Spanned {
+                inner: Token::FnOpen,
+                span: Span::from(29..30),
+            },
+            Spanned {
+                inner: Token::Ident("var"),
+                span: Span::from(30..33),
+            },
+            Spanned {
+                inner: Token::FnOpen,
+                span: Span::from(33..34),
+            },
+            Spanned {
+                inner: Token::Uint(8),
+                span: Span::from(34..35),
+            },
+            Spanned {
+                inner: Token::FnClose,
+                span: Span::from(35..36),
+            },
+            Spanned {
+                inner: Token::FnClose,
+                span: Span::from(36..37),
+            },
+            Spanned {
+                inner: Token::ListClose,
+                span: Span::from(37..38),
+            },
+            Spanned {
+                inner: Token::Semicolon,
+                span: Span::from(38..39),
+            },
         ];
         assert_eq!(output.output(), Some(&tokens));
     }
