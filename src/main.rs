@@ -1,3 +1,4 @@
+mod ast;
 mod cmd;
 mod compile;
 mod core;
