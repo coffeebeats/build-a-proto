@@ -5,12 +5,12 @@ use std::path::Path;
 use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
 use crate::core::ImportRoot;
+use crate::core::PackageName;
 use crate::core::SchemaImport;
 use crate::lex::Span;
 use crate::lex::Spanned;
 use crate::parse::Expr;
 use crate::parse::ParseError;
-use crate::core::PackageName;
 
 use super::symbol::ModuleMetadata;
 use super::symbol::Symbols;
