@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::core::Descriptor;
+use crate::core::PackageName;
+use crate::core::Reference;
 use crate::core::SchemaImport;
-use crate::syntax::PackageName;
-use crate::syntax::Reference;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Symbols                              */
@@ -38,7 +38,7 @@ impl Symbols {
     #[allow(dead_code)]
     pub fn insert_type(&mut self, desc: Descriptor, kind: TypeKind) {
         // Build the fully qualified name for fast lookup
-        let fqn = String::from(&desc);
+        let fqn = desc.to_string();
         self.types.insert(desc.clone(), kind);
         self.descriptors.insert(fqn, desc);
     }
@@ -80,7 +80,7 @@ impl Symbols {
         scope: &Descriptor,
         reference: &Reference,
     ) -> Option<(Descriptor, TypeKind)> {
-        let scope_name = String::from(scope);
+        let scope_name = scope.to_string();
         debug_assert!(!scope_name.is_empty());
 
         let mut parts: Vec<&str> = scope_name.split('.').filter(|s| !s.is_empty()).collect();
@@ -154,7 +154,7 @@ pub enum TypeKind {
 mod tests {
     use super::*;
     use crate::core::DescriptorBuilder;
-    use crate::syntax::PackageName;
+    use crate::core::PackageName;
 
     #[test]
     fn test_symbols_contains() {

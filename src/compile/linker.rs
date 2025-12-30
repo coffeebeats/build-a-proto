@@ -117,8 +117,8 @@ mod tests {
     use crate::core::DescriptorBuilder;
     use crate::core::Module;
     use crate::core::ModuleBuilder;
+    use crate::core::PackageName;
     use crate::core::registry::Kind;
-    use crate::syntax::PackageName;
 
     use super::*;
 

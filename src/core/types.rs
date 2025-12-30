@@ -1,6 +1,6 @@
 use derive_more::Display;
 
-use crate::syntax::Reference;
+use crate::core::Reference;
 
 /* -------------------------------------------------------------------------- */
 /*                                 Enum: Type                                 */

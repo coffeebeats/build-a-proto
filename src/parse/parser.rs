@@ -11,8 +11,8 @@ use chumsky::text::ascii::ident;
 use thiserror::Error;
 
 use crate::core::Encoding;
-use crate::syntax::PackageNameError;
-use crate::syntax::Reference;
+use crate::core::PackageNameError;
+use crate::core::Reference;
 
 use crate::lex::Keyword;
 use crate::lex::Span;

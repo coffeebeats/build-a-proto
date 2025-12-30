@@ -1,4 +1,6 @@
 use derive_more::Display;
+use serde::Deserialize;
+use serde::Serialize;
 use thiserror::Error;
 
 /* -------------------------------------------------------------------------- */
@@ -43,7 +45,7 @@ pub enum PackageNameError {
 /// - `foo.Bar` (uppercase in segment)
 /// - `123.foo` (starts with digit)
 /// - `.foo` (missing leading segment)
-#[derive(Clone, Debug, Display, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Deserialize, Display, PartialEq, Eq, Hash, Serialize)]
 #[display("{}", self.0.join("."))]
 pub struct PackageName(Vec<String>);
 

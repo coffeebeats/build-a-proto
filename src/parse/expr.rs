@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use derive_builder::Builder;
 
 use crate::core::Encoding;
-use crate::syntax::Reference;
+use crate::core::Reference;
 
 use crate::lex::Span;
 use crate::lex::Spanned;

@@ -18,6 +18,7 @@ use crate::core::Field;
 use crate::core::ImportRoot;
 use crate::core::MessageBuilder;
 use crate::core::Module;
+use crate::core::PackageName;
 use crate::core::Registry;
 use crate::core::SchemaImport;
 use crate::core::VariantKind;
@@ -25,7 +26,6 @@ use crate::core::registry;
 use crate::lex::Span;
 use crate::parse::Expr;
 use crate::parse::ParseError;
-use crate::syntax::PackageName;
 
 /* -------------------------------------------------------------------------- */
 /*                                 Fn: Prepare                                */
