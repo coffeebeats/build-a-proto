@@ -36,3 +36,130 @@ impl fmt::Display for Descriptor {
         Ok(())
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                 Mod: Tests                                 */
+/* -------------------------------------------------------------------------- */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_descriptor_display_package_only() {
+        // Given: A descriptor with only a package.
+        let desc = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["com", "example"]).unwrap())
+            .build()
+            .unwrap();
+
+        // When: Converting to string.
+        let result = desc.to_string();
+
+        // Then: Only the package name should be displayed.
+        assert_eq!(result, "com.example");
+    }
+
+    #[test]
+    fn test_descriptor_display_package_with_single_path_element() {
+        // Given: A descriptor with a package and single path element.
+        let desc = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["com", "example"]).unwrap())
+            .path(vec!["Message".to_string()])
+            .build()
+            .unwrap();
+
+        // When: Converting to string.
+        let result = desc.to_string();
+
+        // Then: The package and path should be joined with dots.
+        assert_eq!(result, "com.example.Message");
+    }
+
+    #[test]
+    fn test_descriptor_display_package_with_multiple_path_elements() {
+        // Given: A descriptor with a package and multiple path elements.
+        let desc = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["com", "example"]).unwrap())
+            .path(vec!["Outer".to_string(), "Inner".to_string()])
+            .build()
+            .unwrap();
+
+        // When: Converting to string.
+        let result = desc.to_string();
+
+        // Then: All path elements should be joined with dots.
+        assert_eq!(result, "com.example.Outer.Inner");
+    }
+
+    #[test]
+    fn test_descriptor_display_package_with_name() {
+        // Given: A descriptor with a package and name.
+        let desc = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["com", "example"]).unwrap())
+            .name("Field".to_string())
+            .build()
+            .unwrap();
+
+        // When: Converting to string.
+        let result = desc.to_string();
+
+        // Then: The package and name should be joined with a dot.
+        assert_eq!(result, "com.example.Field");
+    }
+
+    #[test]
+    fn test_descriptor_display_package_with_path_and_name() {
+        // Given: A descriptor with package, path, and name.
+        let desc = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["com", "example"]).unwrap())
+            .path(vec!["Message".to_string()])
+            .name("field".to_string())
+            .build()
+            .unwrap();
+
+        // When: Converting to string.
+        let result = desc.to_string();
+
+        // Then: All parts should be joined with dots.
+        assert_eq!(result, "com.example.Message.field");
+    }
+
+    #[test]
+    fn test_descriptor_display_complex_nested_structure() {
+        // Given: A descriptor with complex nested structure.
+        let desc = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["org", "proto", "test"]).unwrap())
+            .path(vec![
+                "Outer".to_string(),
+                "Middle".to_string(),
+                "Inner".to_string(),
+            ])
+            .name("nested_field".to_string())
+            .build()
+            .unwrap();
+
+        // When: Converting to string.
+        let result = desc.to_string();
+
+        // Then: All components should be properly joined.
+        assert_eq!(result, "org.proto.test.Outer.Middle.Inner.nested_field");
+    }
+
+    #[test]
+    fn test_descriptor_display_empty_path_ignored() {
+        // Given: A descriptor with an empty path.
+        let desc = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["com", "example"]).unwrap())
+            .path(vec![])
+            .name("Field".to_string())
+            .build()
+            .unwrap();
+
+        // When: Converting to string.
+        let result = desc.to_string();
+
+        // Then: The empty path should be ignored.
+        assert_eq!(result, "com.example.Field");
+    }
+}
