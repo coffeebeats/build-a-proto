@@ -164,8 +164,8 @@ mod tests {
 
     #[test]
     fn test_input_with_package_keyword_returns_correct_token_list() {
-        // Given: An input string.
-        let input = "package \"abc.def\"";
+        // Given: An input string with package using dot-separated identifiers.
+        let input = "package abc.def";
 
         // When: The input is lexed.
         let output = lexer().parse(input);
@@ -180,8 +180,16 @@ mod tests {
                 span: Span::from(0..7),
             },
             Spanned {
-                inner: Token::String("abc.def"),
-                span: Span::from(9..16),
+                inner: Token::Ident("abc"),
+                span: Span::from(8..11),
+            },
+            Spanned {
+                inner: Token::Dot,
+                span: Span::from(11..12),
+            },
+            Spanned {
+                inner: Token::Ident("def"),
+                span: Span::from(12..15),
             },
         ];
         assert_eq!(output.output(), Some(&tokens));
