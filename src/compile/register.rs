@@ -2,14 +2,15 @@ use chumsky::error::Rich;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::ast;
+use crate::ast::Item;
+use crate::ast::SourceFile;
 use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
 use crate::core::ImportRoot;
 use crate::core::PackageName;
 use crate::core::SchemaImport;
 use crate::lex::Span;
-use crate::lex::Spanned;
-use crate::parse::Expr;
 use crate::parse::ParseError;
 
 use super::symbol::ModuleMetadata;
@@ -20,87 +21,65 @@ use super::symbol::TypeKind;
 /*                               Struct: Context                              */
 /* -------------------------------------------------------------------------- */
 
-/// `Context` contains compilation context that preserves parsed expressions
+/// `Context` contains compilation context that preserves parsed AST
 /// with spans for semantic validation while tracking type definitions in a
 /// symbol table.
 #[allow(unused)]
 #[derive(Default)]
-pub struct Context<'src> {
+pub struct Context {
     /// `symbols` is a symbol table tracking all type definitions.
     pub symbols: Symbols,
-    /// `expressions` are parsed expressions per schema, preserving spans for
+    /// `source_files` are parsed ASTs per schema, preserving spans for
     /// later validation.
-    pub expressions: HashMap<SchemaImport, Vec<Spanned<Expr<'src>>>>,
+    pub source_files: HashMap<SchemaImport, SourceFile>,
 }
 
 /* -------------------------------------------------------------------------- */
 /*                                Fn: register                                */
 /* -------------------------------------------------------------------------- */
 
-/// `register` registers types from parsed expressions into the compilation
-/// context.
+/// `register` registers types from a parsed AST into the compilation context.
 ///
 /// This function:
-/// 1. Extracts package name, includes, and type definitions from expressions
+/// 1. Extracts package name, includes, and type definitions from the AST
 /// 2. Registers all type names into the symbol table ([`Symbols`])
-/// 3. Stores the original parsed expressions for later validation
+/// 3. Stores the original parsed AST for later validation
 #[allow(unused)]
 pub fn register<'src>(
-    ctx: &mut Context<'src>,
+    ctx: &mut Context,
     import_roots: &[ImportRoot],
     schema_import: &SchemaImport,
-    exprs: Vec<Spanned<Expr<'src>>>,
+    ast: SourceFile,
 ) -> Result<(), ParseError<'src>> {
-    // Find package first, even though it adds an extra traversal, because it
-    // simplifies the remainder of the function. Additionally, the package
-    // declaration should be early on in the expression list.
-    let pkg = exprs
-        .iter()
-        .find_map(|expr| {
-            if let Expr::Package(segments) = &expr.inner {
-                Some(
-                    PackageName::try_from(segments.to_vec())
-                        .expect("parser should validate package names"),
-                )
-            } else {
-                None
-            }
-        })
-        .expect("missing package declaration");
+    let pkg = ast.package.name.clone();
 
     let mut deps = Vec::new();
     let mut type_descriptors = Vec::new();
 
-    for spanned_expr in &exprs {
-        match &spanned_expr.inner {
-            Expr::Comment(_) => {}        // Skip comments
-            Expr::Package(segments) => {} // Already processed
-            Expr::Include(include) => {
-                deps.push(resolve_include_path(
-                    include,
-                    import_roots,
-                    spanned_expr.span,
-                )?);
-            }
-            Expr::Enum(enm) => {
-                let descriptor = build_descriptor(&pkg, &[], enm.name.inner);
+    for include in &ast.includes {
+        deps.push(resolve_include_path(
+            &include.path,
+            import_roots,
+            include.span,
+        )?);
+    }
+
+    for item in &ast.items {
+        match item {
+            Item::Enum(enm) => {
+                let descriptor = build_descriptor(&pkg, &[], &enm.name.name);
                 ctx.symbols
                     .insert_type(descriptor.clone(), TypeKind::Variant);
                 type_descriptors.push(descriptor);
-
-                // TODO: Register nested enums (if we support them in the future)
             }
-            Expr::Message(msg) => {
-                let descriptor = build_descriptor(&pkg, &[], msg.name.inner);
+            Item::Message(msg) => {
+                let descriptor = build_descriptor(&pkg, &[], &msg.name.name);
                 ctx.symbols
                     .insert_type(descriptor.clone(), TypeKind::Message);
                 type_descriptors.push(descriptor.clone());
 
-                register_nested_types(&mut ctx.symbols, &pkg, &[msg.name.inner], msg);
+                register_nested_types(&mut ctx.symbols, &pkg, &[&msg.name.name], msg);
             }
-            _ => unreachable!(
-                "parser should only produce Package, Include, Enum, Message, or Comment"
-            ),
         }
     }
 
@@ -111,7 +90,7 @@ pub fn register<'src>(
     };
 
     ctx.symbols.insert_module(schema_import.clone(), metadata);
-    ctx.expressions.insert(schema_import.clone(), exprs);
+    ctx.source_files.insert(schema_import.clone(), ast);
 
     Ok(())
 }
@@ -119,23 +98,21 @@ pub fn register<'src>(
 /* ----------------------- Fn: register_nested_types ------------------------ */
 
 /// Recursively registers nested messages and enums within a message.
-fn register_nested_types<'src>(
+fn register_nested_types(
     symbols: &mut Symbols,
     package: &PackageName,
-    path: &[&'src str],
-    msg: &crate::parse::Message<'src>,
+    path: &[&str],
+    msg: &ast::Message,
 ) {
-    for enm in &msg.enums {
-        let mut nested_path = path.to_vec();
-        nested_path.push(enm.name.inner);
-        let descriptor = build_descriptor(package, path, enm.name.inner);
+    for enm in &msg.nested_enums {
+        let descriptor = build_descriptor(package, path, &enm.name.name);
         symbols.insert_type(descriptor, TypeKind::Variant);
     }
 
-    for nested_msg in &msg.messages {
-        let mut nested_path = path.to_vec();
-        nested_path.push(nested_msg.name.inner);
-        let descriptor = build_descriptor(package, path, nested_msg.name.inner);
+    for nested_msg in &msg.nested_messages {
+        let mut nested_path: Vec<&str> = path.to_vec();
+        nested_path.push(&nested_msg.name.name);
+        let descriptor = build_descriptor(package, path, &nested_msg.name.name);
         symbols.insert_type(descriptor, TypeKind::Message);
 
         register_nested_types(symbols, package, &nested_path, nested_msg);

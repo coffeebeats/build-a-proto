@@ -9,7 +9,6 @@ pub use chumsky::span::Spanned;
 
 /* ------------------------------- Mod: Lexer ------------------------------- */
 
-pub use lexer::LexError;
 pub use lexer::lex;
 
 /* ------------------------------- Mod: Token ------------------------------- */
