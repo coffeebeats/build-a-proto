@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::core::Descriptor;
 use crate::core::SchemaImport;
-use crate::syntax::PackageName;
-use crate::syntax::Reference;
+use crate::core::PackageName;
+use crate::core::Reference;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Symbols                              */
@@ -154,7 +154,7 @@ pub enum TypeKind {
 mod tests {
     use super::*;
     use crate::core::DescriptorBuilder;
-    use crate::syntax::PackageName;
+    use crate::core::PackageName;
 
     #[test]
     fn test_symbols_contains() {

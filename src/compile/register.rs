@@ -10,7 +10,7 @@ use crate::lex::Span;
 use crate::lex::Spanned;
 use crate::parse::Expr;
 use crate::parse::ParseError;
-use crate::syntax::PackageName;
+use crate::core::PackageName;
 
 use super::symbol::ModuleMetadata;
 use super::symbol::Symbols;

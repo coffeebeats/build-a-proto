@@ -25,7 +25,7 @@ use crate::core::registry;
 use crate::lex::Span;
 use crate::parse::Expr;
 use crate::parse::ParseError;
-use crate::syntax::PackageName;
+use crate::core::PackageName;
 
 /* -------------------------------------------------------------------------- */
 /*                                 Fn: Prepare                                */
