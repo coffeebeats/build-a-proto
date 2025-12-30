@@ -330,9 +330,7 @@ where
     let enumeration = doc_comment
         .clone()
         .or_not()
-        .then(
-            just(Token::Keyword(Keyword::Enum)).ignore_then(ident.map_with(spanned)),
-        )
+        .then(just(Token::Keyword(Keyword::Enum)).ignore_then(ident.map_with(spanned)))
         .then_ignore(
             choice((
                 inline_comment.clone(),
@@ -378,9 +376,7 @@ where
     let message = recursive(|msg| {
         doc_comment
             .or_not()
-            .then(
-                just(Token::Keyword(Keyword::Message)).ignore_then(ident.map_with(spanned)),
-            )
+            .then(just(Token::Keyword(Keyword::Message)).ignore_then(ident.map_with(spanned)))
             .then_ignore(
                 choice((
                     inline_comment,
@@ -459,11 +455,8 @@ where
         .map(|v| v.into_iter().flatten().collect::<Vec<_>>()),
     );
 
-    let declaration = choice((
-        message.map_with(spanned),
-        enumeration.map_with(spanned),
-    ))
-    .recover_with(skip_then_retry_until(any().ignored(), end()));
+    let declaration = choice((message.map_with(spanned), enumeration.map_with(spanned)))
+        .recover_with(skip_then_retry_until(any().ignored(), end()));
 
     let declarations = choice((
         just(Token::Newline).to(None),
@@ -532,29 +525,30 @@ fn import_path<'a>() -> impl Parser<'a, &'a str, PathBuf, extra::Err<Rich<'a, ch
 
 /// Parses a package name string into a vector of segments.
 fn package_name<'a>() -> impl Parser<'a, &'a str, Vec<&'a str>, extra::Err<Rich<'a, char>>> {
-    let segment = ident()
-        .map_with(|s: &'a str, e| spanned(s, e))
-        .validate(|spanned, _info, emitter| {
-            let s = spanned.inner;
+    let segment =
+        ident()
+            .map_with(|s: &'a str, e| spanned(s, e))
+            .validate(|spanned, _info, emitter| {
+                let s = spanned.inner;
 
-            if let Some(first) = s.chars().next() {
-                if !first.is_ascii_lowercase() {
+                if let Some(first) = s.chars().next() {
+                    if !first.is_ascii_lowercase() {
+                        emitter.emit(Rich::custom(
+                            spanned.span,
+                            PackageNameError::InvalidStart(s.to_owned()),
+                        ));
+                    }
+                }
+
+                if s.chars().any(|c| c.is_ascii_uppercase()) {
                     emitter.emit(Rich::custom(
                         spanned.span,
-                        PackageNameError::InvalidStart(s.to_owned()),
+                        PackageNameError::InvalidCharacters(s.to_owned()),
                     ));
                 }
-            }
 
-            if s.chars().any(|c| c.is_ascii_uppercase()) {
-                emitter.emit(Rich::custom(
-                    spanned.span,
-                    PackageNameError::InvalidCharacters(s.to_owned()),
-                ));
-            }
-
-            s
-        });
+                s
+            });
 
     segment
         .separated_by(just('.'))

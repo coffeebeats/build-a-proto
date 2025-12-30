@@ -22,9 +22,9 @@ use crate::core::Registry;
 use crate::core::SchemaImport;
 use crate::core::VariantKind;
 use crate::core::registry;
+use crate::lex::Span;
 use crate::parse::Expr;
 use crate::parse::ParseError;
-use crate::lex::Span;
 use crate::syntax::PackageName;
 
 /* -------------------------------------------------------------------------- */
