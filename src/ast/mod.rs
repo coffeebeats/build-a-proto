@@ -1,5 +1,6 @@
 mod types;
 
+use derive_builder::Builder;
 use std::path::PathBuf;
 
 use crate::core::PackageName;
@@ -21,7 +22,7 @@ pub use types::TypeKind;
 pub struct SourceFile {
     pub includes: Vec<Include>,
     pub items: Vec<Item>,
-    pub package: Option<Package>,
+    pub package: Package,
     pub span: Span,
 }
 
@@ -158,10 +159,10 @@ pub struct DocComment {
 /* -------------------------------------------------------------------------- */
 
 /// `FieldIndex` represents a field or variant index with its source location.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Builder, Clone, Debug, PartialEq)]
 pub struct FieldIndex {
     pub span: Span,
-    pub value: u64,
+    pub value: usize,
 }
 
 /* -------------------------------------------------------------------------- */
