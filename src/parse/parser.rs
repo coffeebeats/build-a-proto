@@ -972,8 +972,8 @@ package foo.bar;
 
         let doc = ast.package.doc.unwrap();
         assert_eq!(doc.lines.len(), 2);
-        assert_eq!(doc.lines[0], " Example comment explaining a package.");
-        assert_eq!(doc.lines[1], " Version: 1.0.0");
+        assert_eq!(doc.lines[0], "Example comment explaining a package.");
+        assert_eq!(doc.lines[1], "Version: 1.0.0");
     }
 
     #[test]
