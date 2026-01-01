@@ -573,10 +573,12 @@ mod tests {
         assert!(output.has_errors());
         let errors = output.errors().collect::<Vec<_>>();
         assert_eq!(errors.len(), 1);
-        assert!(errors[0]
-            .reason()
-            .to_string()
-            .contains("integer value exceeds maximum"));
+        assert!(
+            errors[0]
+                .reason()
+                .to_string()
+                .contains("integer value exceeds maximum")
+        );
 
         // Then: The output contains an Invalid token.
         let tokens = output.output().unwrap();

@@ -63,7 +63,9 @@ pub fn prepare<'a>(
                     .iter()
                     .map(|e| match e {
                         ast::Encoding::Bits(n) => crate::core::Encoding::Bits(*n as usize),
-                        ast::Encoding::BitsVariable(n) => crate::core::Encoding::BitsVariable(*n as usize),
+                        ast::Encoding::BitsVariable(n) => {
+                            crate::core::Encoding::BitsVariable(*n as usize)
+                        }
                         ast::Encoding::Delta => crate::core::Encoding::Delta,
                         ast::Encoding::FixedPoint(i, f) => {
                             crate::core::Encoding::FixedPoint(*i as usize, *f as usize)
