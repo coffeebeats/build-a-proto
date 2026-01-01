@@ -62,19 +62,19 @@ pub fn prepare<'a>(
                 enc.encodings
                     .iter()
                     .map(|e| match e {
-                        ast::Encoding::Bits(n) => crate::core::Encoding::Bits(*n),
-                        ast::Encoding::BitsVariable(n) => crate::core::Encoding::BitsVariable(*n),
+                        ast::Encoding::Bits(n) => crate::core::Encoding::Bits(*n as usize),
+                        ast::Encoding::BitsVariable(n) => crate::core::Encoding::BitsVariable(*n as usize),
                         ast::Encoding::Delta => crate::core::Encoding::Delta,
                         ast::Encoding::FixedPoint(i, f) => {
-                            crate::core::Encoding::FixedPoint(*i, *f)
+                            crate::core::Encoding::FixedPoint(*i as usize, *f as usize)
                         }
-                        ast::Encoding::Pad(n) => crate::core::Encoding::Pad(*n),
+                        ast::Encoding::Pad(n) => crate::core::Encoding::Pad(*n as usize),
                         ast::Encoding::ZigZag => crate::core::Encoding::ZigZag,
                     })
                     .collect()
             }))
             .name(field.name.name.clone())
-            .index(field.index.value)
+            .index(field.index.value as usize)
             .typ(convert_type(&field.typ))
             .build()
             .unwrap()
