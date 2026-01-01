@@ -33,6 +33,7 @@ pub struct SourceFile {
 /// `Package` represents a package declaration in a schema file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Package {
+    pub doc: Option<DocComment>,
     pub name: PackageName,
     pub span: Span,
 }

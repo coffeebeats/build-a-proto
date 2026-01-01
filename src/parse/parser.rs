@@ -81,18 +81,56 @@ where
     let string = select! { Token::String(s) => s };
     let uint = select! { Token::Uint(n) => n };
 
-    let package = just(Token::Keyword(Keyword::Package))
-        .ignore_then(
-            ident_token
-                .separated_by(just(Token::Dot))
-                .at_least(1)
-                .collect::<Vec<_>>(),
+    // Comments
+
+    let comment = select! { Token::Comment(c) => c };
+    let inline_comment = just(Token::Newline)
+        .not()
+        .ignore_then(comment)
+        .then_ignore(just(Token::Newline))
+        .ignored()
+        .labelled("inline comment");
+
+    let line_comment = comment
+        .then_ignore(just(Token::Newline))
+        .ignored()
+        .labelled("line comment");
+
+    let doc_comment = comment
+        .map(|c| vec![c])
+        .foldl(
+            just(Token::Newline).ignore_then(comment).repeated(),
+            |mut v, c| {
+                v.push(c);
+                v
+            },
         )
-        .then_ignore(just(Token::Semicolon))
-        .map_with(|segments: Vec<&str>, e| (segments, e.span()))
+        .then_ignore(just(Token::Newline))
+        .labelled("doc comment");
+
+    // Package
+
+    let package = doc_comment
+        .clone()
+        .or_not()
+        .then(
+            just(Token::Keyword(Keyword::Package))
+                .ignore_then(
+                    ident_token
+                        .separated_by(just(Token::Dot))
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .then_ignore(just(Token::Semicolon)),
+        )
+        .map_with(|(comment, segments), e| (comment, segments, e.span()))
         .validate(
-            |(segments, span), _, emitter| match PackageName::try_from(segments) {
+            |(comment, segments, span), _, emitter| match PackageName::try_from(segments) {
                 Ok(pkg_name) => Some(ast::Package {
+                    doc: comment.map(|lines| ast::DocComment {
+                        lines: lines.into_iter().map(|s| s.to_string()).collect(),
+                        span,
+                    }),
                     name: pkg_name,
                     span,
                 }),
@@ -123,33 +161,6 @@ where
         )
         .labelled("include")
         .boxed();
-
-    // Comments
-
-    let comment = select! { Token::Comment(c) => c };
-    let inline_comment = just(Token::Newline)
-        .not()
-        .ignore_then(comment)
-        .then_ignore(just(Token::Newline))
-        .ignored()
-        .labelled("inline comment");
-
-    let line_comment = comment
-        .then_ignore(just(Token::Newline))
-        .ignored()
-        .labelled("line comment");
-
-    let doc_comment = comment
-        .map(|c| vec![c])
-        .foldl(
-            just(Token::Newline).ignore_then(comment).repeated(),
-            |mut v, c| {
-                v.push(c);
-                v
-            },
-        )
-        .then_ignore(just(Token::Newline))
-        .labelled("doc comment");
 
     // Types
 
@@ -480,13 +491,8 @@ where
         None
     });
 
-    let leading = choice((
-        just(Token::Newline).to(None),
-        line_comment.clone().map_with(spanned).map(Some),
-    ))
-    .repeated()
-    .collect::<Vec<_>>()
-    .map(|v| v.into_iter().flatten().collect::<Vec<_>>());
+    // TODO: Handle disconnected line comments above a package doc comment.
+    let leading = just(Token::Newline).repeated().ignored();
 
     let header = leading.ignore_then(package).then(
         choice((just(Token::Newline).to(None), include.map(Some)))
@@ -938,5 +944,60 @@ mod tests {
         assert!(r.is_absolute(), "Expected absolute reference");
         assert_eq!(r.path(), vec!["other", "package"]);
         assert_eq!(r.name(), "MyType");
+    }
+
+    #[test]
+    fn test_package_with_doc_comment_parses_correctly() {
+        use crate::lex::lex;
+
+        // Given: An input with doc comments before the package declaration.
+        let source = r#"
+// Example comment explaining a package.
+// Version: 1.0.0
+package foo.bar;
+"#;
+
+        // When: The source is lexed and parsed.
+        let (tokens, lex_errors) = lex(source);
+        assert!(lex_errors.is_empty());
+        let tokens = tokens.unwrap();
+        let result = parse(&tokens, source.len());
+
+        // Then: The input has no errors.
+        assert!(result.errors.is_empty());
+
+        // Then: The package has the correct doc comment.
+        let ast = result.ast.expect("Expected AST");
+        assert_eq!(ast.package.name.to_string(), "foo.bar");
+
+        let doc = ast.package.doc.unwrap();
+        assert_eq!(doc.lines.len(), 2);
+        assert_eq!(doc.lines[0], "Example comment explaining a package.");
+        assert_eq!(doc.lines[1], "Version: 1.0.0");
+    }
+
+    #[test]
+    fn test_package_without_doc_comment_parses_correctly() {
+        use crate::lex::lex;
+
+        // Given: An input without doc comments before the package declaration.
+        let source = r#"
+package foo.bar;
+"#;
+
+        // When: The source is lexed and parsed.
+        let (tokens, lex_errors) = lex(source);
+        assert!(lex_errors.is_empty());
+        let tokens = tokens.unwrap();
+
+        let result = parse(&tokens, source.len());
+
+        // Then: The input has no errors.
+        assert!(result.errors.is_empty());
+
+        // Then: The package has no doc comment.
+        let ast = result.ast.unwrap();
+        assert_eq!(ast.package.name.to_string(), "foo.bar");
+        assert!(ast.package.doc.is_none(),);
     }
 }
