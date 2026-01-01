@@ -162,7 +162,7 @@ pub struct DocComment {
 #[derive(Builder, Clone, Debug, PartialEq)]
 pub struct FieldIndex {
     pub span: Span,
-    pub value: usize,
+    pub value: u64,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -180,24 +180,27 @@ pub struct EncodingSpec {
 /*                              Enum: Encoding                                */
 /* -------------------------------------------------------------------------- */
 
-/// `Encoding` specifies how a field should be encoded in the wire format.
+/// `Encoding` specifies how a field should be encoded in the wire format. Note
+/// that the wrapped integer types should be later validated that they meet
+/// documented size limits.
 #[allow(unused)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Encoding {
-    /// Fixed-size bit encoding.
-    Bits(usize),
+    /// Fixed-size bit encoding (must be less than size of integer type).
+    Bits(u64),
 
-    /// Variable-length bit encoding with a maximum size.
-    BitsVariable(usize),
+    /// Variable-length bit encoding with a maximum size (must be less than
+    /// size of integer type).
+    BitsVariable(u64),
 
     /// Delta encoding (difference from previous value).
     Delta,
 
     /// Fixed-point encoding with integer and fractional bits.
-    FixedPoint(usize, usize),
+    FixedPoint(u64, u64),
 
     /// Padding bits.
-    Pad(usize),
+    Pad(u64),
 
     /// ZigZag encoding for signed integers.
     ZigZag,
