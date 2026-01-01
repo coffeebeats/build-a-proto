@@ -68,14 +68,18 @@ fn lexer<'src>()
     // Input
 
     let uint = chumsky::text::int(10).from_str().validate(
-        |result: Result<usize, ParseIntError>, info, emitter| {
+        |result: Result<u64, ParseIntError>, info, emitter| {
             if let Ok(value) = result {
                 return spanned(Token::Uint(value), info);
             }
 
             let msg = match result.unwrap_err().kind() {
                 std::num::IntErrorKind::PosOverflow => {
-                    format!("invalid input: value too large: {}", info.slice())
+                    format!(
+                        "invalid input: integer value exceeds maximum ({}): {}",
+                        u64::MAX,
+                        info.slice()
+                    )
                 }
                 _ => format!("invalid input: unrecognized value: {}", info.slice()),
             };
@@ -536,5 +540,47 @@ mod tests {
             },
         ];
         assert_eq!(output.output(), Some(&tokens));
+    }
+
+    #[test]
+    fn test_input_with_u64_max_value_parses_successfully() {
+        // Given: An input string with u64::MAX.
+        let input = "18446744073709551615";
+
+        // When: The input is lexed.
+        let output = lexer().parse(input);
+
+        // Then: The input has no errors.
+        assert!(!output.has_errors());
+
+        // Then: The output token list contains the max u64 value.
+        let tokens = vec![Spanned {
+            inner: Token::Uint(u64::MAX),
+            span: Span::from(0..20),
+        }];
+        assert_eq!(output.output(), Some(&tokens));
+    }
+
+    #[test]
+    fn test_input_with_value_exceeding_u64_max_produces_error() {
+        // Given: An input string with a value that exceeds u64::MAX.
+        let input = "18446744073709551616"; // u64::MAX + 1
+
+        // When: The input is lexed.
+        let output = lexer().parse(input);
+
+        // Then: The input has an error.
+        assert!(output.has_errors());
+        let errors = output.errors().collect::<Vec<_>>();
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0]
+            .reason()
+            .to_string()
+            .contains("integer value exceeds maximum"));
+
+        // Then: The output contains an Invalid token.
+        let tokens = output.output().unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert!(matches!(tokens[0].inner, Token::Invalid(_)));
     }
 }
