@@ -214,7 +214,7 @@ where
         .map_with(|(size, t), e| ast::Type {
             kind: ast::TypeKind::Array {
                 element: Box::new(t),
-                size: size.map(|s| s as u64),
+                size,
             },
             span: e.span(),
         });
@@ -253,7 +253,7 @@ where
                 .collect()
                 .delimited_by(just(Token::FnOpen), just(Token::FnClose)),
         )
-        .map(|args: Vec<usize>| ast::Encoding::FixedPoint(args[0], args[1]));
+        .map(|args: Vec<u64>| ast::Encoding::FixedPoint(args[0], args[1]));
 
     let delta = just(Token::Ident("delta")).map(|_| ast::Encoding::Delta);
     let zig_zag = just(Token::Ident("zig_zag")).map(|_| ast::Encoding::ZigZag);

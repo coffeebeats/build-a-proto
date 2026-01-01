@@ -30,7 +30,10 @@ pub enum Token<'src> {
     Comment(&'src str),
     Ident(&'src str),
     String(&'src str),
-    Uint(usize),
+    /// `Uint` is any unsigned integer token; stored as a `u64` to ensure cross-
+    /// platform compatibility and maximum flexibility. Downstream phases should
+    /// enforce stricter size limits as needed.
+    Uint(u64),
 }
 
 /* ------------------------------ Enum: Keyword ----------------------------- */
