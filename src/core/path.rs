@@ -268,6 +268,15 @@ impl AsRef<Path> for SchemaImport {
     }
 }
 
+/* ------------------------------ Impl: Display ----------------------------- */
+
+impl std::fmt::Display for SchemaImport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = self.0.display().to_string();
+        f.write_str(&s)
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                 Mod: tests                                 */
 /* -------------------------------------------------------------------------- */
