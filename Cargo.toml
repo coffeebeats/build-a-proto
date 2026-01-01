@@ -11,7 +11,7 @@
   chumsky        = {version = "0.12.0", features = ["lexical-numbers"]}
   clap           = {version = "4.5.42", features = ["cargo", "derive"]}
   derive_builder = "0.20.2"
-  derive_more    = {version = "2.1.0", features = ["display"]}
+  derive_more    = {version = "2.1.1", features = ["display"]}
   serde          = {version = "1.0.228", features = ["derive"]}
   thiserror      = "2.0.17"
 
