@@ -1,50 +1,54 @@
 use derive_more::Display;
 
-use crate::core::Reference;
+use crate::ast;
 use crate::lex::Span;
 
 /* -------------------------------------------------------------------------- */
-/*                                Struct: Type                                */
+/*                                 Enum: Type                                 */
 /* -------------------------------------------------------------------------- */
 
 /// `Type` is a parsed type with its source location.
 #[allow(unused)]
 #[derive(Clone, Debug, PartialEq)]
-pub struct Type {
-    pub kind: TypeKind,
-    pub span: Span,
-}
+pub enum Type {
+    /// An array type with an optional fixed size.
+    Array(Array),
 
-/* -------------------------------------------------------------------------- */
-/*                               Enum: TypeKind                               */
-/* -------------------------------------------------------------------------- */
-
-/// `TypeKind` enumerates the different kinds of types in the schema language.
-#[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
-pub enum TypeKind {
-    /// Placeholder to support error recovery during parsing.
-    Invalid,
-
-    /// A scalar (primitive) type.
-    Scalar(ScalarType),
+    /// A map type with key and value types.
+    Map(Map),
 
     /// A reference to another type (message or enum).
     Reference(Reference),
 
-    /// An array type with an optional fixed size.
-    Array {
-        element: Box<Type>,
-        size: Option<u64>,
-    },
-
-    /// A map type with key and value types.
-    Map { key: Box<Type>, value: Box<Type> },
+    /// A scalar (primitive) type.
+    Scalar(Scalar),
 }
 
 /* -------------------------------------------------------------------------- */
-/*                              Enum: ScalarType                              */
+/*                              Struct: Reference                             */
 /* -------------------------------------------------------------------------- */
+
+/// `Reference` defines a reference to another [`crate::ast::Type`],
+/// [`crate::ast::Message`], or [`crate::ast::Enum`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct Reference {
+    pub components: Vec<super::Ident>,
+    pub is_absolute: bool,
+    pub span: Span,
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Struct: Scalar                               */
+/* -------------------------------------------------------------------------- */
+
+/// `Scalar` represents a [`ScalarType`] definition.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Scalar {
+    pub kind: ScalarType,
+    pub span: Span,
+}
+
+/* ---------------------------- Enum: ScalarType ---------------------------- */
 
 /// `ScalarType` enumerates the primitive types supported by the schema language.
 #[allow(unused)]
@@ -78,4 +82,28 @@ pub enum ScalarType {
     Uint32,
     #[display("u64")]
     Uint64,
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Struct: Array                               */
+/* -------------------------------------------------------------------------- */
+
+/// `Array` represents an array type declaration.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Array {
+    pub element: Box<Type>,
+    pub size: Option<ast::Uint>,
+    pub span: Span,
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Struct: Map                                */
+/* -------------------------------------------------------------------------- */
+
+/// `Map` represents an array type declaration.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Map {
+    pub key: Box<Type>,
+    pub value: Box<Type>,
+    pub span: Span,
 }
