@@ -29,6 +29,7 @@ pub enum SchemaItem {
 
 impl Schema {
     /// `iter_includes` returns an iterator over [`Include`] items.
+    #[allow(unused)]
     pub fn iter_includes(&self) -> impl Iterator<Item = &ast::Include> {
         self.items.iter().filter_map(|item| match item {
             SchemaItem::Include(i) => Some(i),
@@ -39,6 +40,7 @@ impl Schema {
     /// `iter_messages` returns an iterator over [`ast::Message`] items. If
     /// `deep` is `true`, then all nested [`ast::Message`] items will be
     /// included as well, using a pre-order traversal (root node then children).
+    #[allow(unused)]
     pub fn iter_messages(&self, deep: bool) -> impl Iterator<Item = &ast::Message> {
         let messages = self.items.iter().filter_map(|item| match item {
             SchemaItem::Message(m) => Some(m),
@@ -51,6 +53,7 @@ impl Schema {
     /// `iter_enums` returns an iterator over [`ast::Enum`] items. If `deep` is
     /// `true`, then all nested [`ast::Enum`] items will be included as well,
     /// using a pre-order traversal (root node then children).
+    #[allow(unused)]
     pub fn iter_enums(&self, deep: bool) -> impl Iterator<Item = &ast::Enum> {
         let enums = self.items.iter().filter_map(|item| match item {
             SchemaItem::Enum(e) => Some(e),
@@ -59,15 +62,4 @@ impl Schema {
 
         if deep { todo!() } else { enums }
     }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                Struct: Ident                               */
-/* -------------------------------------------------------------------------- */
-
-/// `Ident` represents an identifier with its source location.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Ident {
-    pub name: String,
-    pub span: crate::lex::Span,
 }
