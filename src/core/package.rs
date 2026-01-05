@@ -59,7 +59,7 @@ impl std::ops::Deref for PackageName {
     }
 }
 
-/* ------------------------ Impl: TryFrom<Vec<&str>> ------------------------ */
+/* --------------------- Impl: TryFrom<Vec<AsRef<str>>> --------------------- */
 
 impl<T> TryFrom<Vec<T>> for PackageName
 where

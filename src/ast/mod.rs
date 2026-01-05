@@ -60,7 +60,7 @@ pub struct Text {
 /* -------------------------------------------------------------------------- */
 
 /// `Uint` represents an unsigned integer with its source location.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Uint<T = u64> {
     pub value: T,
     pub span: crate::lex::Span,

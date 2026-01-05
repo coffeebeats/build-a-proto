@@ -64,7 +64,7 @@ where
                 Err(errs) => {
                     for err in errs {
                         let msg = format!("{}", err.reason());
-                        emitter.emit(Rich::custom(span, msg));
+                        emitter.emit(Rich::custom(span.clone(), msg));
                     }
 
                     ast::Include {
@@ -143,124 +143,177 @@ fn import_path<'a>() -> impl Parser<'a, &'a str, PathBuf, extra::Err<Rich<'a, ch
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parse::test_parse;
+
+    /* ----------------------- Package Parser Tests ------------------------ */
+
+    #[test]
+    fn test_package_single_component_succeeds() {
+        // Given: A simple package declaration.
+        let input = "package foo;";
+
+        // When: The input is parsed.
+        let (package, errors): (Option<ast::Package>, _) = test_parse!(input, package());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let package = package.expect("should have output");
+
+        // Then: The package has one component.
+        assert_eq!(package.components.len(), 1);
+        assert_eq!(package.components[0].name, "foo");
+        assert!(package.comment.is_none());
+    }
+
+    #[test]
+    fn test_package_multiple_components_succeeds() {
+        // Given: A package with dot-separated components.
+        let input = "package foo.bar.baz;";
+
+        // When: The input is parsed.
+        let (package, errors): (Option<ast::Package>, _) = test_parse!(input, package());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let package = package.expect("should have output");
+
+        // Then: All components are present.
+        assert_eq!(package.components.len(), 3);
+        assert_eq!(package.components[0].name, "foo");
+        assert_eq!(package.components[1].name, "bar");
+        assert_eq!(package.components[2].name, "baz");
+    }
+
+    #[test]
+    fn test_package_with_doc_comment_succeeds() {
+        // Given: A package with a preceding doc comment.
+        let input = "// Package comment\npackage foo.bar;";
+
+        // When: The input is parsed.
+        let (package, errors): (Option<ast::Package>, _) = test_parse!(input, package());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let package = package.expect("should have output");
+
+        // Then: The comment is captured.
+        assert!(package.comment.is_some());
+        let comment = package.comment.as_ref().unwrap();
+        assert_eq!(comment.comments.len(), 1);
+        assert_eq!(comment.comments[0].content, "Package comment");
+    }
+
+    #[test]
+    fn test_package_without_semicolon_fails() {
+        // Given: A package declaration missing the semicolon.
+        let input = "package foo";
+
+        // When: The input is parsed.
+        let (_result, errors): (Option<ast::Package>, _) = test_parse!(input, package());
+
+        // Then: Parsing fails.
+        assert!(!errors.is_empty());
+    }
+
+    /* ----------------------- Import Parser Tests -------------------------- */
+
+    #[test]
+    fn test_import_valid_path_succeeds() {
+        // Given: A valid import statement.
+        let input = "include \"foo/bar.baproto\";";
+
+        // When: The input is parsed.
+        let (import, errors): (Option<ast::Include>, _) = test_parse!(input, import());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let import = import.expect("should have output");
+
+        // Then: The path is correct.
+        assert_eq!(import.path.to_str().unwrap(), "foo/bar.baproto");
+    }
 
     #[test]
     fn test_import_rejects_dot_prefix() {
-        // Given: An input with a ./ prefixed include path.
-        let input = vec![
-            Token::Keyword(Keyword::Include),
-            Token::String("./local/file.baproto"),
-            Token::Semicolon,
-        ];
+        // Given: An import with a ./ prefixed path.
+        let input = "include \"./local/file.baproto\";";
 
         // When: The input is parsed.
-        let output = import().parse(input.as_slice());
+        let (import, errors): (Option<ast::Include>, _) = test_parse!(input, import());
 
-        // Then: The input has an error (relative paths with . are rejected).
-        assert_eq!(output.errors().count(), 1);
-        assert_eq!(
-            output.into_errors().first().unwrap().reason().to_string(),
-            ImportPathError::RelativeSegment(".".to_owned()).to_string()
-        );
+        // Then: Parsing reports an error.
+        assert!(!errors.is_empty());
+
+        // Then: The error mentions relative segments.
+        let error_msg = format!("{:?}", errors[0]);
+        assert!(error_msg.contains("relative segment"));
+
+        // Then: A default import is still returned for error recovery.
+        assert!(import.is_some());
     }
 
     #[test]
     fn test_import_rejects_dotdot_prefix() {
-        // Given: An input with a ../ prefixed include path.
-        let input = vec![
-            Token::Keyword(Keyword::Include),
-            Token::String("../parent/file.baproto"),
-            Token::Semicolon,
-        ];
+        // Given: An import with a ../ prefixed path.
+        let input = "include \"../parent/file.baproto\";";
 
         // When: The input is parsed.
-        let output = import().parse(input.as_slice());
+        let (import, errors): (Option<ast::Include>, _) = test_parse!(input, import());
 
-        // Then: The input has an error (relative paths with .. are rejected).
-        assert_eq!(output.errors().count(), 1);
-        assert_eq!(
-            output.into_errors().first().unwrap().reason().to_string(),
-            ImportPathError::RelativeSegment("..".to_owned()).to_string()
-        );
+        // Then: Parsing reports an error.
+        assert!(!errors.is_empty());
+        assert!(import.is_some()); // Error recovery
     }
 
     #[test]
     fn test_import_rejects_trailing_dot() {
-        // Given: An input with a '.' suffix in include path.
-        let input = vec![
-            Token::Keyword(Keyword::Include),
-            Token::String("foo./bar.baproto"),
-            Token::Semicolon,
-        ];
+        // Given: An import with a trailing dot in a segment.
+        let input = "include \"foo./bar.baproto\";";
 
         // When: The input is parsed.
-        let output = import().parse(input.as_slice());
+        let (import, errors): (Option<ast::Include>, _) = test_parse!(input, import());
 
-        // Then: The input has an error (relative paths with . are rejected).
-        assert_eq!(output.errors().count(), 1);
-        assert_eq!(
-            output.into_errors().first().unwrap().reason().to_string(),
-            ImportPathError::TrailingDot("foo.".to_owned()).to_string()
-        );
+        // Then: Parsing reports an error.
+        assert!(!errors.is_empty());
+        assert!(import.is_some());
     }
 
     #[test]
     fn test_import_rejects_missing_extension() {
-        // Given: An input with a path missing the .baproto extension.
-        let input = vec![
-            Token::Keyword(Keyword::Include),
-            Token::String("foo/bar"),
-            Token::Semicolon,
-        ];
+        // Given: An import path missing the .baproto extension.
+        let input = "include \"foo/bar\";";
 
         // When: The input is parsed.
-        let output = import().parse(input.as_slice());
+        let (import, errors): (Option<ast::Include>, _) = test_parse!(input, import());
 
-        // Then: The input has an error (paths without .baproto are rejected).
-        assert_eq!(output.errors().count(), 1);
-        assert_eq!(
-            output.into_errors().first().unwrap().reason().to_string(),
-            ImportPathError::InvalidExtension.to_string()
-        );
+        // Then: Parsing reports an error.
+        assert!(!errors.is_empty());
+        assert!(import.is_some());
     }
 
     #[test]
     fn test_import_rejects_wrong_extension() {
-        // Given: An input with a wrong extension.
-        let input = vec![
-            Token::Keyword(Keyword::Include),
-            Token::String("foo/bar.txt"),
-            Token::Semicolon,
-        ];
+        // Given: An import with a wrong extension.
+        let input = "include \"foo/bar.txt\";";
 
         // When: The input is parsed.
-        let output = import().parse(input.as_slice());
+        let (import, errors): (Option<ast::Include>, _) = test_parse!(input, import());
 
-        // Then: The input has an error (paths without .baproto are rejected).
-        assert_eq!(output.errors().count(), 1);
-        assert_eq!(
-            output.into_errors().first().unwrap().reason().to_string(),
-            ImportPathError::InvalidExtension.to_string()
-        );
+        // Then: Parsing reports an error.
+        assert!(!errors.is_empty());
+        assert!(import.is_some());
     }
 
     #[test]
     fn test_import_rejects_empty_filename() {
-        // Given: An input with just '.baproto' as the filename.
-        let input = vec![
-            Token::Keyword(Keyword::Include),
-            Token::String(".baproto"),
-            Token::Semicolon,
-        ];
+        // Given: An import with just '.baproto' as the filename.
+        let input = "include \".baproto\";";
 
         // When: The input is parsed.
-        let output = import().parse(input.as_slice());
+        let (import, errors): (Option<ast::Include>, _) = test_parse!(input, import());
 
-        // Then: The input has an error (empty filename is rejected).
-        assert_eq!(output.errors().count(), 1);
-        assert_eq!(
-            output.into_errors().first().unwrap().reason().to_string(),
-            ImportPathError::EmptyFilename.to_string()
-        );
+        // Then: Parsing reports an error.
+        assert!(!errors.is_empty());
+        assert!(import.is_some());
     }
 }

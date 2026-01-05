@@ -1,13 +1,17 @@
+mod analyze;
 mod ast;
 mod cmd;
 mod compile;
 mod core;
 mod generate;
+mod ir;
 mod lex;
 mod parse;
+mod visit;
 
 use anyhow::Result;
 use clap::Parser;
+
 use cmd::Commands;
 
 #[derive(Parser)]

@@ -20,7 +20,6 @@ pub struct Descriptor {
 }
 
 /* ------------------------------ Impl: Display ----------------------------- */
-
 impl fmt::Display for Descriptor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.package)?;

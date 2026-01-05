@@ -1,28 +1,16 @@
 mod compiler;
-mod linker;
-mod prepare;
 mod register;
+mod source;
 mod symbol;
 
 /* ------------------------------ Mod: Compiler ----------------------------- */
 
-#[allow(dead_code)]
-pub use compiler::*;
+pub use compiler::Compiler;
 
-/* ------------------------------- Mod: Linker ------------------------------ */
+/* ------------------------------- Mod: Source ------------------------------ */
 
-pub use linker::*;
-
-/* ------------------------------ Mod: Prepare ------------------------------ */
-
-pub use prepare::*;
-
-/* ------------------------------ Mod: Register ----------------------------- */
-
-#[allow(unused_imports)]
-pub use register::*;
+pub use source::*;
 
 /* ------------------------------- Mod: Symbol ------------------------------ */
 
-#[allow(unused_imports)]
-pub use symbol::*;
+pub use symbol::{Symbols, TypeKind};

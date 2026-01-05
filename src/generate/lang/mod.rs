@@ -1,6 +1,7 @@
-mod gdscript;
+//! Native language generators.
+//!
+//! This module contains built-in code generators for various languages.
 
-/* ------------------------------ Mod: GDScript ----------------------------- */
+mod rust;
 
-#[allow(unused_imports)]
-pub use gdscript::*;
+pub use rust::RustGenerator;

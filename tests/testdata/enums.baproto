@@ -1,0 +1,18 @@
+package test.status;
+
+enum Status {
+    0: Unknown;
+    1: Active;
+    2: Inactive;
+}
+
+enum Tagged {
+    0: None;
+    1: u32 Number;
+    2: string Text;
+}
+
+message WithEnum {
+    0: Status status;
+    1: Tagged value;
+}

@@ -1,4 +1,5 @@
 use crate::ast;
+use crate::core::PackageName;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Schema                               */
@@ -28,6 +29,13 @@ pub enum SchemaItem {
 /* ------------------------------ Impl: Schema ------------------------------ */
 
 impl Schema {
+    pub fn get_package_name(&self) -> Option<PackageName> {
+        self.items.iter().find_map(|item| match item {
+            ast::SchemaItem::Package(pkg) => PackageName::try_from(pkg.clone()).ok(),
+            _ => None,
+        })
+    }
+
     /// `iter_includes` returns an iterator over [`Include`] items.
     #[allow(unused)]
     pub fn iter_includes(&self) -> impl Iterator<Item = &ast::Include> {

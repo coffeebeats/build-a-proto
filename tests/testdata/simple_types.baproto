@@ -1,0 +1,18 @@
+package test.types;
+
+message Scalars {
+    0: bool flag;
+    1: u8 tiny;
+    2: u16 small;
+    3: u32 medium;
+    4: u64 large;
+    5: i8 signed_tiny;
+    6: i16 signed_small;
+    7: i32 signed_medium;
+    8: i64 signed_large;
+    9: f32 float_val;
+    10: f64 double_val;
+    11: string text;
+    12: byte single_byte;
+    13: bit flag_bit;
+}

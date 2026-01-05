@@ -21,8 +21,8 @@ where
     choice((
         array().map(ast::Type::Array),
         map().map(ast::Type::Map),
-        reference().map(ast::Type::Reference),
         scalar().map(ast::Type::Scalar),
+        reference().map(ast::Type::Reference),
     ))
     .labelled("type")
     .boxed()
@@ -120,4 +120,593 @@ where
         kind,
         span: e.span(),
     })
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Mod: Tests                                 */
+/* -------------------------------------------------------------------------- */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parse::test_parse;
+
+    /* ----------------------- Scalar Type Tests ------------------------ */
+
+    #[test]
+    fn test_type_bit_scalar_succeeds() {
+        // Given: A bit type declaration.
+        let input = "bit";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty(), "unexpected errors: {:?}", errors);
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a bit scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type, got {:?}", typ);
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Bit);
+    }
+
+    #[test]
+    fn test_type_bool_scalar_succeeds() {
+        // Given: A bool type declaration.
+        let input = "bool";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a bool scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Bool);
+    }
+
+    #[test]
+    fn test_type_byte_scalar_succeeds() {
+        // Given: A byte type declaration.
+        let input = "byte";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a byte scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Byte);
+    }
+
+    #[test]
+    fn test_type_u8_scalar_succeeds() {
+        // Given: A u8 type declaration.
+        let input = "u8";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a u8 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Uint8);
+    }
+
+    #[test]
+    fn test_type_u16_scalar_succeeds() {
+        // Given: A u16 type declaration.
+        let input = "u16";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a u16 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Uint16);
+    }
+
+    #[test]
+    fn test_type_u32_scalar_succeeds() {
+        // Given: A u32 type declaration.
+        let input = "u32";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a u32 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Uint32);
+    }
+
+    #[test]
+    fn test_type_u64_scalar_succeeds() {
+        // Given: A u64 type declaration.
+        let input = "u64";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a u64 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Uint64);
+    }
+
+    #[test]
+    fn test_type_i8_scalar_succeeds() {
+        // Given: An i8 type declaration.
+        let input = "i8";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an i8 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Int8);
+    }
+
+    #[test]
+    fn test_type_i16_scalar_succeeds() {
+        // Given: An i16 type declaration.
+        let input = "i16";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an i16 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Int16);
+    }
+
+    #[test]
+    fn test_type_i32_scalar_succeeds() {
+        // Given: An i32 type declaration.
+        let input = "i32";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an i32 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Int32);
+    }
+
+    #[test]
+    fn test_type_i64_scalar_succeeds() {
+        // Given: An i64 type declaration.
+        let input = "i64";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an i64 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Int64);
+    }
+
+    #[test]
+    fn test_type_f32_scalar_succeeds() {
+        // Given: An f32 type declaration.
+        let input = "f32";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an f32 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Float32);
+    }
+
+    #[test]
+    fn test_type_f64_scalar_succeeds() {
+        // Given: An f64 type declaration.
+        let input = "f64";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an f64 scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Float64);
+    }
+
+    #[test]
+    fn test_type_string_scalar_succeeds() {
+        // Given: A string type declaration.
+        let input = "string";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a string scalar.
+        let ast::Type::Scalar(scalar) = typ else {
+            panic!("expected scalar type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::String);
+    }
+
+    /* ----------------------- Array Type Tests ------------------------- */
+
+    #[test]
+    fn test_type_dynamic_array_succeeds() {
+        // Given: A dynamic array type (no size).
+        let input = "[]u32";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an array without a size.
+        let ast::Type::Array(arr) = typ else {
+            panic!("expected array type");
+        };
+        assert!(arr.size.is_none());
+
+        // Then: The element type is correct.
+        let ast::Type::Scalar(scalar) = *arr.element else {
+            panic!("expected scalar element type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Uint32);
+    }
+
+    #[test]
+    fn test_type_fixed_array_succeeds() {
+        // Given: A fixed-size array type.
+        let input = "[10]byte";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is an array with the specified size.
+        let ast::Type::Array(arr) = typ else {
+            panic!("expected array type");
+        };
+        assert_eq!(arr.size.as_ref().unwrap().value, 10);
+
+        // Then: The element type is correct.
+        let ast::Type::Scalar(scalar) = *arr.element else {
+            panic!("expected scalar element type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::Byte);
+    }
+
+    #[test]
+    fn test_type_array_with_large_size_succeeds() {
+        // Given: An array with a large size.
+        let input = "[1024]u8";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The array size is correct.
+        let ast::Type::Array(arr) = typ else {
+            panic!("expected array type");
+        };
+        assert_eq!(arr.size.as_ref().unwrap().value, 1024);
+    }
+
+    #[test]
+    fn test_type_array_with_string_element_succeeds() {
+        // Given: An array of strings.
+        let input = "[]string";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The element type is string.
+        let ast::Type::Array(arr) = typ else {
+            panic!("expected array type");
+        };
+        let ast::Type::Scalar(scalar) = *arr.element else {
+            panic!("expected scalar element type");
+        };
+        assert_eq!(scalar.kind, ast::ScalarType::String);
+    }
+
+    /* ----------------------- Map Type Tests --------------------------- */
+
+    #[test]
+    fn test_type_map_string_to_u64_succeeds() {
+        // Given: A map type from string to u64.
+        let input = "[string]u64";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The type is a map with correct key/value types.
+        let ast::Type::Map(m) = typ else {
+            panic!("expected map type");
+        };
+
+        // Then: The key type is string.
+        let ast::Type::Scalar(key_scalar) = *m.key else {
+            panic!("expected scalar key type");
+        };
+        assert_eq!(key_scalar.kind, ast::ScalarType::String);
+
+        // Then: The value type is u64.
+        let ast::Type::Scalar(value_scalar) = *m.value else {
+            panic!("expected scalar value type");
+        };
+        assert_eq!(value_scalar.kind, ast::ScalarType::Uint64);
+    }
+
+    #[test]
+    fn test_type_map_u32_to_string_succeeds() {
+        // Given: A map type from u32 to string.
+        let input = "[u32]string";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The types are correct.
+        let ast::Type::Map(m) = typ else {
+            panic!("expected map type");
+        };
+        let ast::Type::Scalar(key) = *m.key else {
+            panic!("expected scalar key");
+        };
+        assert_eq!(key.kind, ast::ScalarType::Uint32);
+        let ast::Type::Scalar(value) = *m.value else {
+            panic!("expected scalar value");
+        };
+        assert_eq!(value.kind, ast::ScalarType::String);
+    }
+
+    #[test]
+    fn test_type_map_bool_to_byte_succeeds() {
+        // Given: A map type from bool to byte.
+        let input = "[bool]byte";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The types are correct.
+        let ast::Type::Map(m) = typ else {
+            panic!("expected map type");
+        };
+        let ast::Type::Scalar(key) = *m.key else {
+            panic!("expected scalar key");
+        };
+        assert_eq!(key.kind, ast::ScalarType::Bool);
+        let ast::Type::Scalar(value) = *m.value else {
+            panic!("expected scalar value");
+        };
+        assert_eq!(value.kind, ast::ScalarType::Byte);
+    }
+
+    /* -------------------- Reference Type Tests ------------------------ */
+
+    #[test]
+    fn test_type_simple_reference_succeeds() {
+        // Given: A simple type reference.
+        let input = "MyType";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The reference is relative with one component.
+        let ast::Type::Reference(r) = typ else {
+            panic!("expected reference type");
+        };
+        assert!(!r.is_absolute);
+        assert_eq!(r.components.len(), 1);
+        assert_eq!(r.components[0].name, "MyType");
+    }
+
+    #[test]
+    fn test_type_relative_reference_succeeds() {
+        // Given: A relative type reference with multiple components.
+        let input = "foo.bar.MyType";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The reference is relative with correct components.
+        let ast::Type::Reference(r) = typ else {
+            panic!("expected reference type");
+        };
+        assert!(!r.is_absolute);
+        assert_eq!(r.components.len(), 3);
+        assert_eq!(r.components[0].name, "foo");
+        assert_eq!(r.components[1].name, "bar");
+        assert_eq!(r.components[2].name, "MyType");
+    }
+
+    #[test]
+    fn test_type_absolute_reference_succeeds() {
+        // Given: An absolute type reference (leading dot).
+        let input = ".root.MyType";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The reference is absolute.
+        let ast::Type::Reference(r) = typ else {
+            panic!("expected reference type");
+        };
+        assert!(r.is_absolute);
+        assert_eq!(r.components.len(), 2);
+        assert_eq!(r.components[0].name, "root");
+        assert_eq!(r.components[1].name, "MyType");
+    }
+
+    #[test]
+    fn test_type_absolute_single_component_reference_succeeds() {
+        // Given: An absolute reference with a single component.
+        let input = ".Foo";
+
+        // When: The input is parsed.
+        let (typ, errors) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: The reference is absolute with one component.
+        let ast::Type::Reference(r) = typ else {
+            panic!("expected reference type");
+        };
+        assert!(r.is_absolute);
+        assert_eq!(r.components.len(), 1);
+        assert_eq!(r.components[0].name, "Foo");
+    }
+
+    /* ----------------------- Error Cases -------------------------- */
+
+    #[test]
+    fn test_type_empty_brackets_fails() {
+        // Given: Empty brackets without a base type.
+        let input = "[]";
+
+        // When: The input is parsed.
+        let (_result, errors): (Option<ast::Type>, _) = test_parse!(input, typ());
+
+        // Then: Parsing fails.
+        assert!(!errors.is_empty(), "expected parsing to fail");
+    }
+
+    #[test]
+    fn test_type_unclosed_array_brackets_fails() {
+        // Given: Array type with unclosed brackets.
+        let input = "[u8";
+
+        // When: The input is parsed.
+        let (_result, errors): (Option<ast::Type>, _) = test_parse!(input, typ());
+
+        // Then: Parsing fails.
+        assert!(!errors.is_empty(), "expected parsing to fail");
+    }
+
+    #[test]
+    fn test_type_invalid_scalar_name_becomes_reference() {
+        // Given: An invalid scalar type name.
+        let input = "uint8"; // Should be u8, not uint8
+
+        // When: The input is parsed.
+        let (typ, errors): (Option<ast::Type>, _) = test_parse!(input, typ());
+
+        // Then: Parsing succeeds but interprets as a reference.
+        assert!(errors.is_empty());
+        let typ = typ.expect("should have output");
+
+        // Then: It's parsed as a reference type.
+        let ast::Type::Reference(r) = typ else {
+            panic!("expected reference type");
+        };
+        assert_eq!(r.components[0].name, "uint8");
+    }
 }

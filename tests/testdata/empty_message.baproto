@@ -1,0 +1,3 @@
+package test.empty;
+
+message Empty {}

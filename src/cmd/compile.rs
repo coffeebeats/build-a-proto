@@ -1,25 +1,12 @@
 use anyhow::anyhow;
-use ariadne::Color;
-use ariadne::Label;
-use ariadne::Report;
-use ariadne::ReportKind;
-use ariadne::sources;
-use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::compile::compile;
-use crate::compile::link;
-use crate::compile::prepare;
-use crate::core::ImportRoot;
-use crate::core::Registry;
-use crate::core::SchemaImport;
-use crate::generate;
-use crate::generate::FileWriter;
-use crate::generate::generate;
-use crate::lex::lex;
-use crate::parse::parse;
+use crate::analyze::DiagnosticReporter;
+use crate::compile::Compiler;
+use crate::core::{ImportRoot, SchemaImport};
+use crate::generate::{ExternalGenerator, FileWriter, Generator};
+use crate::generate::lang::RustGenerator;
 
 /* -------------------------------------------------------------------------- */
 /*                                Struct: Args                                */
@@ -28,35 +15,35 @@ use crate::parse::parse;
 #[derive(clap::Args, Debug)]
 pub struct Args {
     #[command(flatten)]
-    bindings: Bindings,
+    pub generator: GeneratorSelection,
 
     /// A path to a directory in which to generate language bindings in.
     #[arg(short, long, value_name = "OUT_DIR")]
-    out: Option<PathBuf>,
+    pub out: Option<PathBuf>,
 
     /// A root directory to search for imported '.baproto' files. Can be
     /// specified multiple times. Imports are resolved by searching each root in
     /// order. If not specified, defaults to the current working directory.
     #[arg(short = 'I', long = "import_root", value_name = "DIR")]
-    import_roots: Vec<PathBuf>,
+    pub import_roots: Vec<PathBuf>,
 
     /// A path to a message definition file to compile.
     #[arg(value_name = "FILES", required = true, num_args = 1..)]
-    files: Vec<PathBuf>,
+    pub files: Vec<PathBuf>,
 }
 
-/* ---------------------------- Struct: Bindings ---------------------------- */
+/* ------------------------- Struct: GeneratorSelection ------------------------- */
 
 #[derive(clap::Args, Debug)]
 #[group(required = true, multiple = false)]
-pub struct Bindings {
-    /// Whether to compile C++ language bindings.
+pub struct GeneratorSelection {
+    /// Generate Rust language bindings.
     #[arg(long)]
-    cpp: bool,
+    pub rust: bool,
 
-    /// Whether to compile GDScript language bindings.
-    #[arg(long)]
-    gdscript: bool,
+    /// Use an external generator binary.
+    #[arg(long = "plugin", value_name = "BINARY")]
+    pub plugin: Option<PathBuf>,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -66,8 +53,7 @@ pub struct Bindings {
 /// [`handle`] implements the `compile` command.
 pub fn handle(args: Args) -> anyhow::Result<()> {
     let out_dir = parse_out_dir(args.out)?;
-
-    let mut reg = Registry::default();
+    let import_roots = parse_import_roots(args.import_roots)?;
 
     let inputs: Vec<SchemaImport> = args
         .files
@@ -75,113 +61,68 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
         .map(|path| SchemaImport::try_from(path).map_err(|e| anyhow!(e)))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut seen = HashSet::<SchemaImport>::with_capacity(inputs.len());
-    let mut files = VecDeque::<SchemaImport>::from(inputs);
+    let mut compiler = Compiler::new(import_roots.clone());
 
-    let import_roots = parse_import_roots(args.import_roots)?;
+    for schema in inputs {
+        println!("Compiling {:?}", schema.as_path());
 
-    let mut failed: Vec<PathBuf> = vec![];
-    while !files.is_empty() {
-        let schema_import = files.pop_front().unwrap();
-
-        if seen.contains(&schema_import) {
-            continue;
-        }
-
-        let path = schema_import.as_path();
-
-        println!(
-            "Compiling {:?} into {:?} (binding={})",
-            path,
-            out_dir,
-            if args.bindings.cpp { "cpp" } else { "gdscript" }
-        );
-
-        let contents = std::fs::read_to_string(path).map_err(|e| anyhow!(e))?;
-
-        let (tokens, lex_errs) = lex(&contents);
-        for err in lex_errs {
-            report_error(path, &contents, err.map_token(|t| t.to_string()));
-        }
-
-        let mut parse_succeeded = true;
-
-        if let Some(tokens) = tokens.as_ref() {
-            let result = parse(tokens, contents.len());
-            for err in result.errors {
-                report_error(path, &contents, err.map_token(|t| t.to_string()));
-            }
-
-            if let Some(ast) = result.ast {
-                if let Err(err) = prepare(&schema_import, &import_roots, &mut reg, &ast) {
-                    report_error(path, &contents, err.map_token(|t| t.to_string()));
-                    parse_succeeded = false;
-                }
-            }
-        }
-
-        if !parse_succeeded {
-            failed.push(path.to_path_buf());
-        }
-
-        // Queue imported modules for processing.
-        for (_, m) in reg.iter_modules() {
-            for dep in &m.deps {
-                if !seen.contains(dep) {
-                    files.push_back(dep.clone());
-                }
-            }
-        }
-
-        seen.insert(schema_import);
+        compiler.compile(schema);
     }
 
-    // Link phase: validate dependencies and detect cycles
-    link(&reg)?;
-
-    // Compile phase: type validation (future)
-    compile(&mut reg).map_err(|e| anyhow!(e))?;
-
-    if args.bindings.gdscript {
-        let mut gdscript = generate::gdscript::<FileWriter>();
-        generate(out_dir, &mut reg, &mut gdscript)?;
+    for diagnostic in &compiler.diagnostics {
+        if let Err(err) = compiler.sources.insert(&diagnostic.span.context) {
+            return Err(anyhow!("Failed to read source file: {}", err));
+        }
     }
 
-    if failed.is_empty() {
-        Ok(())
+    if !compiler.diagnostics.is_empty() {
+        let reporter = DiagnosticReporter::new(&compiler.sources);
+
+        for diagnostic in &compiler.diagnostics {
+            reporter.report(diagnostic);
+        }
+
+        let error_count = compiler
+            .diagnostics
+            .iter()
+            .filter(|d| matches!(d.severity, crate::analyze::Severity::Error))
+            .count();
+
+        if error_count > 0 {
+            return Err(anyhow!("Compilation failed with {} error(s).", error_count));
+        }
+    }
+
+    // Extract IR from compiler
+    let ir = compiler.into_ir();
+
+    // Select and run the generator
+    let generator: Box<dyn Generator> = if args.generator.rust {
+        Box::new(RustGenerator::new())
+    } else if let Some(plugin_path) = args.generator.plugin {
+        Box::new(ExternalGenerator::new(plugin_path).map_err(|e| anyhow!(e))?)
     } else {
-        Err(anyhow!("Failed to parse files: {:?}", failed))
+        // This shouldn't happen due to clap group constraints
+        return Err(anyhow!("No generator specified"));
+    };
+
+    println!("Generating {} bindings...", generator.name());
+
+    let output = generator.generate(&ir).map_err(|e| anyhow!(e))?;
+
+    // Write generated files
+    let writer = FileWriter::new(out_dir);
+    let written_files = writer.write(&output)?;
+
+    for path in &written_files {
+        println!("  Wrote: {}", path.display());
     }
-}
 
-/* ---------------------------- Fn: report_error ---------------------------- */
-
-fn report_error<'a, T, U>(path: T, contents: U, error: chumsky::error::Rich<'a, String>)
-where
-    T: AsRef<Path>,
-    U: AsRef<str>,
-{
-    let location = path.as_ref().display().to_string();
-
-    Report::build(
-        ReportKind::Error,
-        (location.clone(), error.span().into_range()),
-    )
-    .with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
-    .with_message(error.to_string())
-    .with_label(
-        Label::new((location.clone(), error.span().into_range()))
-            .with_message(error.reason().to_string())
-            .with_color(Color::Red),
-    )
-    .with_labels(error.contexts().map(|(label, span)| {
-        Label::new((location.clone(), span.into_range()))
-            .with_message(format!("while parsing this {:?}", label))
-            .with_color(Color::Yellow)
-    }))
-    .finish()
-    .print(sources([(location.clone(), contents.as_ref())]))
-    .unwrap();
+    println!(
+        "\nGeneration successful! {} file(s) written.",
+        written_files.len()
+    );
+    Ok(())
 }
 
 /* ---------------------------- Fn: parse_out_dir --------------------------- */

@@ -1,0 +1,9 @@
+package test.multi;
+
+include "imports/base.baproto";
+
+message Post {
+    0: u32 id;
+    1: User author;
+    2: string content;
+}
