@@ -1,0 +1,8 @@
+Error: unresolved type reference 'NonExistent'
+   ╭─[ /private<temp>/invalid_type_ref.baproto:4:8 ]
+   │
+ 4 │     0: NonExistent field;
+   │        ─────┬─────  
+   │             ╰─────── unresolved type reference 'NonExistent'
+───╯
+Error: Compilation failed with 1 error(s).

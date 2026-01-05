@@ -1,264 +1,239 @@
 mod common;
 
-use baproto::cmd::compile::{Args, GeneratorSelection, handle};
+use assert_cmd::cargo::cargo_bin_cmd;
 
 /* -------------------------------------------------------------------------- */
 /*                              Success Test Cases                            */
 /* -------------------------------------------------------------------------- */
 
 #[test]
-fn test_compile_empty_message() {
+fn test_compile_empty_message() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with an empty message
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("empty_message.baproto");
 
-    // When: Create Args and compile with Rust generator
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
+    // Then: Generated code matches golden file
+    let content = ctx.read_generated("test/empty.rs");
+    common::golden::assert_golden(&content, "tests/golden/empty_message.rs");
 
-    // Then: Output file is generated
-    assert!(ctx.has_generated("test/empty.rs"));
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/empty_message.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_simple_types() {
+fn test_compile_simple_types() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with all scalar types
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("simple_types.baproto");
 
-    // When: Compiling
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-
-    // Then: Generated code contains all field types
+    // Then: Generated code matches golden file
     let content = ctx.read_generated("test/types.rs");
-    common::assertions::assert_contains_all(
-        &content,
-        &[
-            "pub flag: bool",
-            "pub tiny: u8",
-            "pub small: u16",
-            "pub medium: u32",
-            "pub large: u64",
-            "pub signed_tiny: i8",
-            "pub signed_small: i16",
-            "pub signed_medium: i32",
-            "pub signed_large: i64",
-            "pub float_val: f32",
-            "pub double_val: f64",
-            "pub text: String",
-        ],
-    );
+    common::golden::assert_golden(&content, "tests/golden/simple_types.rs");
+
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/simple_types.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_nested_messages() {
+fn test_compile_nested_messages() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with nested message definitions
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("nested_messages.baproto");
 
-    // When: Compiling
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-
-    // Then: Nested types are generated
+    // Then: Generated code matches golden file
     let content = ctx.read_generated("test/nesting.rs");
-    common::assertions::assert_contains_all(
-        &content,
-        &[
-            "pub struct Level1",
-            "pub struct Level2",
-            "pub struct Level3",
-        ],
-    );
+    common::golden::assert_golden(&content, "tests/golden/nested_messages.rs");
+
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/nested_messages.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_enums() {
+fn test_compile_enums() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with enum definitions
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("enums.baproto");
 
-    // When: Compiling
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-
-    // Then: Enum variants are generated
+    // Then: Generated code matches golden file
     let content = ctx.read_generated("test/status.rs");
-    common::assertions::assert_contains_all(
-        &content,
-        &[
-            "pub enum Status",
-            "Unknown",
-            "Active",
-            "Inactive",
-            "pub enum Tagged",
-            "None",
-            "Number",
-            "Text",
-        ],
-    );
+    common::golden::assert_golden(&content, "tests/golden/enums.rs");
+
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/enums.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_arrays_and_maps() {
+fn test_compile_arrays_and_maps() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with array and map types
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("arrays_and_maps.baproto");
 
-    // When: Compiling
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-
-    // Then: Collections are mapped to Vec and HashMap
+    // Then: Generated code matches golden file
     let content = ctx.read_generated("test/collections.rs");
-    common::assertions::assert_contains_all(
-        &content,
-        &[
-            "pub numbers: Vec<u32>",
-            "pub names: Vec<String>",
-            "pub counts: HashMap<String, u32>",
-        ],
-    );
+    common::golden::assert_golden(&content, "tests/golden/arrays_and_maps.rs");
+
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/arrays_and_maps.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_cross_file_imports() {
+fn test_compile_cross_file_imports() -> Result<(), Box<dyn std::error::Error>> {
     // Given: Multiple schemas with cross-file references
     let ctx = common::TestContext::new();
     let base = ctx.copy_testdata_preserve("imports/base.baproto");
     let dependent = ctx.copy_testdata_preserve("imports/dependent.baproto");
 
-    // When: Compiling both files
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![base, dependent],
-    };
-    let result = handle(args);
+    // When: Compiling both files via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&base)
+        .arg(&dependent)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-
-    // Then: Both types are in the same package file
+    // Then: Generated code matches golden file
     let content = ctx.read_generated("test/multi.rs");
-    common::assertions::assert_contains_all(
-        &content,
-        &["pub struct User", "pub struct Post", "pub author: User"],
-    );
+    common::golden::assert_golden(&content, "tests/golden/cross_file_imports.rs");
+
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/cross_file_imports.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_encodings() {
+fn test_compile_encodings() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with custom encodings
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("encodings.baproto");
 
-    // When: Compiling
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
+    // Then: Generated code matches golden file
+    let content = ctx.read_generated("test/encoded.rs");
+    common::golden::assert_golden(&content, "tests/golden/encodings.rs");
 
-    // Then: Message is generated (encoding information is in IR but may not be in generated code yet)
-    assert!(ctx.has_generated("test/encoded.rs"));
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/encodings.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_doc_comments() {
+fn test_compile_doc_comments() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with documentation comments
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("doc_comments.baproto");
 
-    // When: Compiling
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
+    // Then: Generated code matches golden file
+    let content = ctx.read_generated("test/docs.rs");
+    common::golden::assert_golden(&content, "tests/golden/doc_comments.rs");
 
-    // Then: Doc comments are preserved (if the generator supports them)
-    assert!(ctx.has_generated("test/docs.rs"));
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/doc_comments.rs");
+
+    Ok(())
 }
 
 #[test]
-fn test_compile_multiple_files_same_package() {
+fn test_compile_multiple_files_same_package() -> Result<(), Box<dyn std::error::Error>> {
     // Given: Two schemas with the same package
     let ctx = common::TestContext::new();
     let schema1 = ctx.create_schema(
@@ -282,24 +257,27 @@ message Second {
 "#,
     );
 
-    // When: Compiling both
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema1, schema2],
-    };
-    let result = handle(args);
+    // When: Compiling both via CLI
+    cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema1)
+        .arg(&schema2)
+        .assert()
+        .success();
 
-    // Then: Compilation succeeds
-    assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-
-    // Then: Both types are in the same output file
+    // Then: Generated code matches golden file
     let content = ctx.read_generated("test/merge.rs");
-    common::assertions::assert_contains_all(&content, &["pub struct First", "pub struct Second"]);
+    common::golden::assert_golden(&content, "tests/golden/multiple_files_same_package.rs");
+
+    // Then: The generated file has valid Rust syntax.
+    common::golden::check_rust_syntax("tests/golden/multiple_files_same_package.rs");
+
+    Ok(())
 }
 
 /* -------------------------------------------------------------------------- */
@@ -307,122 +285,116 @@ message Second {
 /* -------------------------------------------------------------------------- */
 
 #[test]
-fn test_error_duplicate_field_indices() {
+fn test_error_duplicate_field_indices() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema with duplicate field indices
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("duplicate_indices.baproto");
 
-    // When: Attempting to compile
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI (expecting failure)
+    let assert = cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .failure();
 
-    // Then: Compilation fails with appropriate error
-    assert!(result.is_err(), "Expected compilation to fail");
-    let error = result.unwrap_err();
-    let error_msg = format!("{:?}", error);
-    // The diagnostic system reports errors, resulting in "Compilation failed"
-    assert!(
-        error_msg.contains("Compilation failed") || error_msg.contains("duplicate"),
-        "Expected compilation failure due to duplicate indices, got: {}",
-        error_msg
-    );
+    // Then: Error output matches golden file
+    let output = assert.get_output();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
+    common::golden::assert_golden(&normalized, "tests/golden/duplicate_field_indices.log");
+
+    Ok(())
 }
 
 #[test]
-fn test_error_invalid_type_reference() {
+fn test_error_invalid_type_reference() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema referencing a nonexistent type
     let ctx = common::TestContext::new();
     let schema = ctx.copy_testdata("invalid_type_ref.baproto");
 
-    // When: Attempting to compile
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI (expecting failure)
+    let assert = cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .failure();
 
-    // Then: Compilation fails with type resolution error
-    assert!(result.is_err(), "Expected compilation to fail");
-    let error = result.unwrap_err();
-    let error_msg = format!("{:?}", error);
-    // Check for either "unresolved", "not found", or "Compilation failed" (which indicates diagnostics were reported)
-    assert!(
-        error_msg.contains("Compilation failed")
-            || error_msg.contains("unresolved")
-            || error_msg.contains("not found")
-            || error_msg.contains("NonExistent"),
-        "Expected type resolution error, got: {}",
-        error_msg
-    );
+    // Then: Error output matches golden file
+    let output = assert.get_output();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
+    common::golden::assert_golden(&normalized, "tests/golden/invalid_type_reference.log");
+
+    Ok(())
 }
 
 #[test]
-fn test_error_file_not_found() {
+fn test_error_file_not_found() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A nonexistent file path
     let ctx = common::TestContext::new();
     let bad_path = ctx.input_path().join("nonexistent.baproto");
 
-    // When: Attempting to compile
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![bad_path],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI (expecting failure)
+    let assert = cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&bad_path)
+        .assert()
+        .failure();
 
-    // Then: Compilation fails with file not found error
-    assert!(result.is_err(), "Expected compilation to fail");
-    let error_msg = format!("{:?}", result.unwrap_err());
-    assert!(
-        error_msg.contains("does not exist") || error_msg.contains("not found"),
-        "Expected file not found error, got: {}",
-        error_msg
-    );
+    // Then: Error output matches golden file
+    let output = assert.get_output();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
+    common::golden::assert_golden(&normalized, "tests/golden/file_not_found.log");
+
+    Ok(())
 }
 
 #[test]
-fn test_error_invalid_extension() {
+fn test_error_invalid_extension() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A file without .baproto extension
     let ctx = common::TestContext::new();
-    let bad_file = ctx.input_dir.path().join("schema.txt");
+    let bad_file = ctx.input_path().join("schema.txt");
     std::fs::write(&bad_file, "package test;").unwrap();
 
-    // When: Attempting to compile
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![bad_file],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI (expecting failure)
+    let assert = cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&bad_file)
+        .assert()
+        .failure();
 
-    // Then: Compilation fails with extension error
-    assert!(result.is_err(), "Expected compilation to fail");
-    common::assertions::assert_error_contains(&result.unwrap_err(), ".baproto");
+    // Then: Error output matches golden file
+    let output = assert.get_output();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
+    common::golden::assert_golden(&normalized, "tests/golden/invalid_extension.log");
+
+    Ok(())
 }
 
 #[test]
-fn test_error_missing_import_file() {
+fn test_error_missing_import_file() -> Result<(), Box<dyn std::error::Error>> {
     // Given: A schema that includes a missing file
     let ctx = common::TestContext::new();
     let schema = ctx.create_schema(
@@ -438,27 +410,23 @@ message Foo {
 "#,
     );
 
-    // When: Attempting to compile
-    let args = Args {
-        generator: GeneratorSelection {
-            rust: true,
-            plugin: None,
-        },
-        out: Some(ctx.output_path().to_path_buf()),
-        import_roots: vec![ctx.input_path().to_path_buf()],
-        files: vec![schema],
-    };
-    let result = handle(args);
+    // When: Compiling via CLI (expecting failure)
+    let assert = cargo_bin_cmd!("baproto")
+        .arg("compile")
+        .arg("--rust")
+        .arg("-o")
+        .arg(ctx.output_path())
+        .arg("-I")
+        .arg(ctx.input_path())
+        .arg(&schema)
+        .assert()
+        .failure();
 
-    // Then: Compilation fails with import resolution error
-    assert!(result.is_err(), "Expected compilation to fail");
-    let error_msg = format!("{:?}", result.unwrap_err());
-    assert!(
-        error_msg.contains("import")
-            || error_msg.contains("missing.baproto")
-            || error_msg.contains("not found")
-            || error_msg.contains("Failed to read source file"),
-        "Expected import resolution error, got: {}",
-        error_msg
-    );
+    // Then: Error output matches golden file
+    let output = assert.get_output();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
+    common::golden::assert_golden(&normalized, "tests/golden/missing_import_file.log");
+
+    Ok(())
 }

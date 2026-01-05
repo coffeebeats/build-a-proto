@@ -1,4 +1,4 @@
-pub mod assertions;
+pub mod golden;
 
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -85,11 +85,6 @@ impl TestContext {
         let path = self.output_dir.path().join(relative_path);
         std::fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("failed to read {}", path.display()))
-    }
-
-    /// Checks if a generated file exists.
-    pub fn has_generated(&self, relative_path: &str) -> bool {
-        self.output_dir.path().join(relative_path).exists()
     }
 }
 
