@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use crate::analyze::DiagnosticReporter;
 use crate::compile::Compiler;
 use crate::core::{ImportRoot, SchemaImport};
-use crate::generate::{ExternalGenerator, FileWriter, Generator};
-use crate::generate::lang::RustGenerator;
+use crate::generate2::lang::RustGenerator;
+use crate::generate2::{ExternalGenerator, FileWriter, Generator};
 
 /* -------------------------------------------------------------------------- */
 /*                                Struct: Args                                */

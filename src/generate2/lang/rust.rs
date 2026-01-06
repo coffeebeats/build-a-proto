@@ -5,8 +5,8 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::generate::codegen::rust::RustCodeGen;
-use crate::generate::{Generator, GeneratorError, GeneratorOutput, StringWriter, generate_schema};
+use crate::generate2::codegen::rust::RustCodeGen;
+use crate::generate2::{Generator, GeneratorError, GeneratorOutput, StringWriter, generate_schema};
 use crate::ir;
 
 /* -------------------------------------------------------------------------- */
@@ -171,7 +171,7 @@ impl Generator for RustGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generate::codegen::rust::RustCodeGen;
+    use crate::generate2::codegen::rust::RustCodeGen;
     use crate::ir::{Encoding, Field, Message, NativeType, Package, Schema, WireFormat};
 
     fn make_encoding(native: NativeType) -> Encoding {

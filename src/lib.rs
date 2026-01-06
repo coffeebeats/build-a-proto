@@ -5,7 +5,7 @@ pub mod ast;
 pub mod cmd;
 pub mod compile;
 pub mod core;
-pub mod generate;
+pub mod generate2;
 pub mod ir;
 pub mod lex;
 pub mod parse;

@@ -3,7 +3,7 @@ mod ast;
 mod cmd;
 mod compile;
 mod core;
-mod generate;
+mod generate2;
 mod ir;
 mod lex;
 mod parse;

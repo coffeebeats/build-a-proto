@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-use crate::generate::{CodeWriter, GeneratorOutput, Writer};
+use crate::generate2::{CodeWriter, GeneratorOutput, Writer};
 use crate::ir;
 
 /* -------------------------------------------------------------------------- */
@@ -124,8 +124,12 @@ pub trait CodeGen<W: Writer> {
     /// Generates an enum variant.
     ///
     /// Called for each variant in an enum. Handles both Unit and Field variants.
-    fn gen_variant(&mut self, variant: &ir::Variant, current_package: &str, w: &mut W)
-        -> Result<()>;
+    fn gen_variant(
+        &mut self,
+        variant: &ir::Variant,
+        current_package: &str,
+        w: &mut W,
+    ) -> Result<()>;
 
     // ========================= Encoding/Decoding (Optional) =========================
 
@@ -198,7 +202,12 @@ where
 /* -------------------------------------------------------------------------- */
 
 /// Recursively generates code for a message and its nested types.
-fn gen_message<W, G>(msg: &ir::Message, current_package: &str, generator: &mut G, w: &mut W) -> Result<()>
+fn gen_message<W, G>(
+    msg: &ir::Message,
+    current_package: &str,
+    generator: &mut G,
+    w: &mut W,
+) -> Result<()>
 where
     W: Writer,
     G: CodeGen<W>,

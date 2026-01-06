@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use super::CodeGen;
-use crate::generate::{CodeWriter, Writer};
+use crate::generate2::{CodeWriter, Writer};
 use crate::ir::{self, NativeType, Variant};
 
 /* -------------------------------------------------------------------------- */
