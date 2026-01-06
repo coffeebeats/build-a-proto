@@ -19,11 +19,15 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod code;
+pub mod codegen;
 mod external;
 mod generator;
 pub mod lang;
 mod writer;
 
+pub use code::{CodeWriter, StringWriter, Writer};
+pub use codegen::{generate_schema, CodeGen};
 pub use external::ExternalGenerator;
 pub use generator::Generator;
 pub use writer::FileWriter;

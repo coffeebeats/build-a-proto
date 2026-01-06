@@ -28,12 +28,12 @@ impl Container {
     }
 
     /// Encodes this message to a writer.
-    pub fn encode(&self, _writer: &mut impl Write) -> std::io::Result<()> {
+    pub fn encode(&self, _writer: &mut [u8]) -> std::io::Result<()> {
         todo!("serialization not yet implemented")
     }
 
     /// Decodes a message from a reader.
-    pub fn decode(_reader: &mut impl Read) -> std::io::Result<Self> {
+    pub fn decode(_reader: &[u8]) -> std::io::Result<Self> {
         todo!("deserialization not yet implemented")
     }
 }

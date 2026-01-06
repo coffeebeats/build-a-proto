@@ -1,6 +1,7 @@
 mod common;
 
 use assert_cmd::cargo::cargo_bin_cmd;
+use common::golden;
 
 /* -------------------------------------------------------------------------- */
 /*                              Success Test Cases                            */
@@ -26,10 +27,10 @@ fn test_compile_empty_message() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/empty.rs");
-    common::golden::assert_golden(&content, "tests/golden/empty_message.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/empty_message.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/empty_message.rs");
+    golden::check_rust_syntax("tests/testdata/golden/empty_message.rs");
 
     Ok(())
 }
@@ -54,10 +55,10 @@ fn test_compile_simple_types() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/types.rs");
-    common::golden::assert_golden(&content, "tests/golden/simple_types.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/simple_types.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/simple_types.rs");
+    golden::check_rust_syntax("tests/testdata/golden/simple_types.rs");
 
     Ok(())
 }
@@ -82,10 +83,10 @@ fn test_compile_nested_messages() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/nesting.rs");
-    common::golden::assert_golden(&content, "tests/golden/nested_messages.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/nested_messages.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/nested_messages.rs");
+    golden::check_rust_syntax("tests/testdata/golden/nested_messages.rs");
 
     Ok(())
 }
@@ -110,10 +111,10 @@ fn test_compile_enums() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/status.rs");
-    common::golden::assert_golden(&content, "tests/golden/enums.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/enums.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/enums.rs");
+    golden::check_rust_syntax("tests/testdata/golden/enums.rs");
 
     Ok(())
 }
@@ -138,10 +139,10 @@ fn test_compile_arrays_and_maps() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/collections.rs");
-    common::golden::assert_golden(&content, "tests/golden/arrays_and_maps.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/arrays_and_maps.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/arrays_and_maps.rs");
+    golden::check_rust_syntax("tests/testdata/golden/arrays_and_maps.rs");
 
     Ok(())
 }
@@ -150,8 +151,8 @@ fn test_compile_arrays_and_maps() -> Result<(), Box<dyn std::error::Error>> {
 fn test_compile_cross_file_imports() -> Result<(), Box<dyn std::error::Error>> {
     // Given: Multiple schemas with cross-file references
     let ctx = common::TestContext::new();
-    let base = ctx.copy_testdata_preserve("imports/base.baproto");
-    let dependent = ctx.copy_testdata_preserve("imports/dependent.baproto");
+    let base = ctx.copy_testdata_preserve("imports_base.baproto");
+    let dependent = ctx.copy_testdata_preserve("imports_dependent.baproto");
 
     // When: Compiling both files via CLI
     cargo_bin_cmd!("baproto")
@@ -168,10 +169,10 @@ fn test_compile_cross_file_imports() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/multi.rs");
-    common::golden::assert_golden(&content, "tests/golden/cross_file_imports.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/cross_file_imports.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/cross_file_imports.rs");
+    golden::check_rust_syntax("tests/testdata/golden/cross_file_imports.rs");
 
     Ok(())
 }
@@ -196,10 +197,10 @@ fn test_compile_encodings() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/encoded.rs");
-    common::golden::assert_golden(&content, "tests/golden/encodings.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/encodings.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/encodings.rs");
+    golden::check_rust_syntax("tests/testdata/golden/encodings.rs");
 
     Ok(())
 }
@@ -224,10 +225,10 @@ fn test_compile_doc_comments() -> Result<(), Box<dyn std::error::Error>> {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/docs.rs");
-    common::golden::assert_golden(&content, "tests/golden/doc_comments.rs");
+    golden::assert_golden(&content, "tests/testdata/golden/doc_comments.rs");
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/doc_comments.rs");
+    golden::check_rust_syntax("tests/testdata/golden/doc_comments.rs");
 
     Ok(())
 }
@@ -272,10 +273,13 @@ message Second {
 
     // Then: Generated code matches golden file
     let content = ctx.read_generated("test/merge.rs");
-    common::golden::assert_golden(&content, "tests/golden/multiple_files_same_package.rs");
+    golden::assert_golden(
+        &content,
+        "tests/testdata/golden/multiple_files_same_package.rs",
+    );
 
     // Then: The generated file has valid Rust syntax.
-    common::golden::check_rust_syntax("tests/golden/multiple_files_same_package.rs");
+    golden::check_rust_syntax("tests/testdata/golden/multiple_files_same_package.rs");
 
     Ok(())
 }
@@ -305,8 +309,11 @@ fn test_error_duplicate_field_indices() -> Result<(), Box<dyn std::error::Error>
     // Then: Error output matches golden file
     let output = assert.get_output();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
-    common::golden::assert_golden(&normalized, "tests/golden/duplicate_field_indices.log");
+    let normalized = golden::normalize_paths(&stderr, ctx.input_path());
+    golden::assert_golden(
+        &normalized,
+        "tests/testdata/golden/duplicate_field_indices.log",
+    );
 
     Ok(())
 }
@@ -332,8 +339,11 @@ fn test_error_invalid_type_reference() -> Result<(), Box<dyn std::error::Error>>
     // Then: Error output matches golden file
     let output = assert.get_output();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
-    common::golden::assert_golden(&normalized, "tests/golden/invalid_type_reference.log");
+    let normalized = golden::normalize_paths(&stderr, ctx.input_path());
+    golden::assert_golden(
+        &normalized,
+        "tests/testdata/golden/invalid_type_reference.log",
+    );
 
     Ok(())
 }
@@ -359,8 +369,8 @@ fn test_error_file_not_found() -> Result<(), Box<dyn std::error::Error>> {
     // Then: Error output matches golden file
     let output = assert.get_output();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
-    common::golden::assert_golden(&normalized, "tests/golden/file_not_found.log");
+    let normalized = golden::normalize_paths(&stderr, ctx.input_path());
+    golden::assert_golden(&normalized, "tests/testdata/golden/file_not_found.log");
 
     Ok(())
 }
@@ -387,8 +397,8 @@ fn test_error_invalid_extension() -> Result<(), Box<dyn std::error::Error>> {
     // Then: Error output matches golden file
     let output = assert.get_output();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
-    common::golden::assert_golden(&normalized, "tests/golden/invalid_extension.log");
+    let normalized = golden::normalize_paths(&stderr, ctx.input_path());
+    golden::assert_golden(&normalized, "tests/testdata/golden/invalid_extension.log");
 
     Ok(())
 }
@@ -425,8 +435,8 @@ message Foo {
     // Then: Error output matches golden file
     let output = assert.get_output();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let normalized = common::golden::normalize_paths(&stderr, ctx.input_path());
-    common::golden::assert_golden(&normalized, "tests/golden/missing_import_file.log");
+    let normalized = golden::normalize_paths(&stderr, ctx.input_path());
+    golden::assert_golden(&normalized, "tests/testdata/golden/missing_import_file.log");
 
     Ok(())
 }

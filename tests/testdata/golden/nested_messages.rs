@@ -7,32 +7,30 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Level1 {
-    pub id: u32,
-    pub nested: Level2,
+pub struct Level3 {
+    pub active: bool,
 }
 
-impl Level1 {
+impl Level3 {
     /// Creates a new instance with default values.
     pub fn new() -> Self {
         Self {
-            id: 0,
-            nested: Level2::new(),
+            active: false,
         }
     }
 
     /// Encodes this message to a writer.
-    pub fn encode(&self, _writer: &mut impl Write) -> std::io::Result<()> {
+    pub fn encode(&self, _writer: &mut [u8]) -> std::io::Result<()> {
         todo!("serialization not yet implemented")
     }
 
     /// Decodes a message from a reader.
-    pub fn decode(_reader: &mut impl Read) -> std::io::Result<Self> {
+    pub fn decode(_reader: &[u8]) -> std::io::Result<Self> {
         todo!("deserialization not yet implemented")
     }
 }
 
-impl Default for Level1 {
+impl Default for Level3 {
     fn default() -> Self {
         Self::new()
     }
@@ -54,12 +52,12 @@ impl Level2 {
     }
 
     /// Encodes this message to a writer.
-    pub fn encode(&self, _writer: &mut impl Write) -> std::io::Result<()> {
+    pub fn encode(&self, _writer: &mut [u8]) -> std::io::Result<()> {
         todo!("serialization not yet implemented")
     }
 
     /// Decodes a message from a reader.
-    pub fn decode(_reader: &mut impl Read) -> std::io::Result<Self> {
+    pub fn decode(_reader: &[u8]) -> std::io::Result<Self> {
         todo!("deserialization not yet implemented")
     }
 }
@@ -71,30 +69,32 @@ impl Default for Level2 {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Level3 {
-    pub active: bool,
+pub struct Level1 {
+    pub id: u32,
+    pub nested: Level2,
 }
 
-impl Level3 {
+impl Level1 {
     /// Creates a new instance with default values.
     pub fn new() -> Self {
         Self {
-            active: false,
+            id: 0,
+            nested: Level2::new(),
         }
     }
 
     /// Encodes this message to a writer.
-    pub fn encode(&self, _writer: &mut impl Write) -> std::io::Result<()> {
+    pub fn encode(&self, _writer: &mut [u8]) -> std::io::Result<()> {
         todo!("serialization not yet implemented")
     }
 
     /// Decodes a message from a reader.
-    pub fn decode(_reader: &mut impl Read) -> std::io::Result<Self> {
+    pub fn decode(_reader: &[u8]) -> std::io::Result<Self> {
         todo!("deserialization not yet implemented")
     }
 }
 
-impl Default for Level3 {
+impl Default for Level1 {
     fn default() -> Self {
         Self::new()
     }
