@@ -53,7 +53,7 @@ pub struct Ident {
 
 /// `Text` represents a single [`String`] literal with its source location.
 #[derive(Clone, Debug, Display, Eq, PartialEq)]
-#[display("\"{}\"", content)]
+#[display("{}", content)]
 pub struct Text {
     pub content: String,
     pub span: crate::lex::Span,
