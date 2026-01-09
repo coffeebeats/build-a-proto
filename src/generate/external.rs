@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 
 use crate::ir;
 
-use super::{Generator, GeneratorError, GeneratorOutput};
+use super::api::{Generator, GeneratorError, GeneratorOutput};
 
 /* -------------------------------------------------------------------------- */
 /*                           Struct: ExternalGenerator                        */
@@ -64,16 +64,8 @@ impl ExternalGenerator {
 }
 
 impl Generator for ExternalGenerator {
-    fn name(&self) -> &'static str {
-        // SAFETY: We leak the string to get a 'static lifetime.
-        // This is acceptable since ExternalGenerator instances are typically
-        // created once and live for the duration of the program.
-        Box::leak(self.name.clone().into_boxed_str())
-    }
-
-    fn extension(&self) -> &'static str {
-        // External generators control their own file naming
-        ""
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn generate(&self, schema: &ir::Schema) -> Result<GeneratorOutput, GeneratorError> {

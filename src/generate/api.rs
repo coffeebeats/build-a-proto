@@ -1,17 +1,7 @@
-//! Code generation framework for baproto schemas.
+//! Public API for code generation.
 //!
-//! This module provides a plugin architecture for code generators, supporting both:
-//! - **Native generators** - Built-in Rust implementations of the `Generator` trait
-//! - **External generators** - Binary plugins invoked via stdin/stdout JSON protocol
-//!
-//! ## Protocol for External Generators
-//!
-//! External generators receive JSON-serialized `ir::Schema` on stdin and must output
-//! a JSON object with a "files" key mapping relative paths to file contents:
-//!
-//! ```json
-//! {"files": {"foo/bar.py": "# generated code..."}}
-//! ```
+//! This module provides the simplified Generator trait and types used by
+//! the command-line interface and external tools.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -19,18 +9,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub mod code;
-pub mod codegen;
-mod external;
-mod generator;
-pub mod lang;
-mod writer;
-
-pub use code::{CodeWriter, StringWriter, Writer};
-pub use codegen::{generate_schema, CodeGen};
-pub use external::ExternalGenerator;
-pub use generator::Generator;
-pub use writer::FileWriter;
+use crate::ir;
 
 /* -------------------------------------------------------------------------- */
 /*                            Struct: GeneratorOutput                         */
@@ -84,4 +63,33 @@ pub enum GeneratorError {
     /// I/O error during generation.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// Generic error from anyhow.
+    #[error("{0}")]
+    Other(#[from] anyhow::Error),
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Trait: Generator                              */
+/* -------------------------------------------------------------------------- */
+
+/// Trait for code generators that transform IR into source code.
+///
+/// This is the public-facing API used by the CLI. It differs from the internal
+/// visitor-pattern generator which provides more fine-grained control.
+///
+/// Implementations can be either native (built-in Rust code) or external
+/// (wrappers around binary plugins).
+pub trait Generator: Send + Sync {
+    /// Returns the unique identifier for this generator.
+    ///
+    /// This is used for logging and error messages.
+    /// Examples: "rust", "gdscript", "cpp"
+    fn name(&self) -> &str;
+
+    /// Generates code from the IR schema.
+    ///
+    /// Returns a map of relative file paths to their contents.
+    /// The caller is responsible for writing these files to disk.
+    fn generate(&self, schema: &ir::Schema) -> Result<GeneratorOutput, GeneratorError>;
 }

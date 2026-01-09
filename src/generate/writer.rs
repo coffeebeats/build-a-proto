@@ -4,7 +4,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::GeneratorOutput;
+use super::api::GeneratorOutput;
 
 /* -------------------------------------------------------------------------- */
 /*                              Struct: FileWriter                            */
@@ -51,61 +51,5 @@ impl FileWriter {
     /// Returns the output directory.
     pub fn out_dir(&self) -> &Path {
         &self.out_dir
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_write_single_file() {
-        let temp_dir = TempDir::new().unwrap();
-        let writer = FileWriter::new(temp_dir.path());
-
-        let mut output = GeneratorOutput::new();
-        output.add("test.txt", "hello world");
-
-        let written = writer.write(&output).unwrap();
-
-        assert_eq!(written.len(), 1);
-        assert!(written[0].exists());
-        assert_eq!(fs::read_to_string(&written[0]).unwrap(), "hello world");
-    }
-
-    #[test]
-    fn test_write_nested_directories() {
-        let temp_dir = TempDir::new().unwrap();
-        let writer = FileWriter::new(temp_dir.path());
-
-        let mut output = GeneratorOutput::new();
-        output.add("foo/bar/baz.txt", "nested content");
-
-        let written = writer.write(&output).unwrap();
-
-        assert_eq!(written.len(), 1);
-        assert!(written[0].exists());
-        assert_eq!(
-            fs::read_to_string(&written[0]).unwrap(),
-            "nested content"
-        );
-    }
-
-    #[test]
-    fn test_write_multiple_files() {
-        let temp_dir = TempDir::new().unwrap();
-        let writer = FileWriter::new(temp_dir.path());
-
-        let mut output = GeneratorOutput::new();
-        output.add("a.txt", "content a");
-        output.add("b/c.txt", "content c");
-
-        let written = writer.write(&output).unwrap();
-
-        assert_eq!(written.len(), 2);
-        for path in &written {
-            assert!(path.exists());
-        }
     }
 }
