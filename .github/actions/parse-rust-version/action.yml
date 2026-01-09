@@ -23,7 +23,7 @@ runs:
       shell: bash
       run: |
         RUST_VERSION=$(
-          cargo metadata --manifest-path ${{ inputs.manifest }} --format-version 1 |
+          cargo metadata --offline --locked --manifest-path ${{ inputs.manifest }} --format-version 1 |
           python3 -c "import json,sys;print(next(filter(lambda p: p.get('name', '') == 'baproto', json.load(sys.stdin)['packages']))['rust_version'])"
         )
 
