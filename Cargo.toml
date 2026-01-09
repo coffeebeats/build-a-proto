@@ -9,7 +9,7 @@
   anyhow         = "1.0.100"
   ariadne        = {version = "0.6.0", features = ["auto-color"]}
   chumsky        = {version = "0.12.0", features = ["lexical-numbers"]}
-  clap           = {version = "4.5.42", features = ["cargo", "derive"]}
+  clap           = {version = "4.5.53", features = ["cargo", "derive"]}
   derive_builder = "0.20.2"
   derive_more    = {version = "2.1.0", features = ["display"]}
   serde          = {version = "1.0.228", features = ["derive"]}
