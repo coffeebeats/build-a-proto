@@ -12,6 +12,7 @@
   clap           = {version = "4.5.53", features = ["cargo", "derive"]}
   derive_builder = "0.20.2"
   derive_more    = {version = "2.1.1", features = ["display"]}
+  itertools      = "0.14.0"
   serde          = {version = "1.0.228", features = ["derive"]}
   thiserror      = "2.0.17"
 

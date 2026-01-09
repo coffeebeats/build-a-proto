@@ -11,18 +11,10 @@
 use chumsky::error::Rich;
 use std::path::Path;
 
-use crate::ast;
-use crate::ast::Item;
-use crate::ast::SourceFile;
-use crate::core::Descriptor;
-use crate::core::DescriptorBuilder;
-use crate::core::EnumBuilder;
+use crate::ast::Schema;
 use crate::core::ImportRoot;
-use crate::core::MessageBuilder;
-use crate::core::Module;
 use crate::core::Registry;
 use crate::core::SchemaImport;
-use crate::core::registry;
 use crate::lex::Span;
 use crate::parse::ParseError;
 
@@ -31,207 +23,12 @@ use crate::parse::ParseError;
 /* -------------------------------------------------------------------------- */
 
 pub fn prepare<'a>(
-    schema_import: &'a SchemaImport,
-    import_roots: &[ImportRoot],
-    registry: &'a mut Registry,
-    ast: &'a SourceFile,
+    _: &'a SchemaImport,
+    _: &[ImportRoot],
+    _: &'a mut Registry,
+    _: &'a Schema,
 ) -> Result<(), ParseError<'a>> {
-    let mut module = Module::new(schema_import.as_path().to_path_buf());
-
-    let package = ast.package.name.clone();
-    module.package = package.clone();
-
-    for include in &ast.includes {
-        module.deps.push(resolve_include_path(
-            &include.path,
-            import_roots,
-            include.span,
-        )?);
-    }
-
-    fn convert_field(field: &ast::Field) -> crate::core::Field {
-        crate::core::FieldBuilder::default()
-            .comment(
-                field
-                    .doc
-                    .as_ref()
-                    .map(|doc| doc.lines.clone())
-                    .unwrap_or_default(),
-            )
-            .encoding(field.encoding.as_ref().map(|enc| {
-                enc.encodings
-                    .iter()
-                    .map(|e| match e {
-                        ast::Encoding::Bits(n) => crate::core::Encoding::Bits(*n as usize),
-                        ast::Encoding::BitsVariable(n) => {
-                            crate::core::Encoding::BitsVariable(*n as usize)
-                        }
-                        ast::Encoding::Delta => crate::core::Encoding::Delta,
-                        ast::Encoding::FixedPoint(i, f) => {
-                            crate::core::Encoding::FixedPoint(*i as usize, *f as usize)
-                        }
-                        ast::Encoding::Pad(n) => crate::core::Encoding::Pad(*n as usize),
-                        ast::Encoding::ZigZag => crate::core::Encoding::ZigZag,
-                    })
-                    .collect()
-            }))
-            .name(field.name.name.clone())
-            .index(field.index.value as usize)
-            .typ(convert_type(&field.typ))
-            .build()
-            .unwrap()
-    }
-
-    fn convert_type(typ: &ast::Type) -> crate::core::Type {
-        match &typ.kind {
-            ast::TypeKind::Invalid => panic!("Invalid type in AST"),
-            ast::TypeKind::Scalar(s) => crate::core::Type::Scalar(convert_scalar(s)),
-            ast::TypeKind::Reference(r) => crate::core::Type::Reference(r.clone()),
-            ast::TypeKind::Array { element, size } => {
-                crate::core::Type::Array(Box::new(convert_type(element)), size.map(|s| s as usize))
-            }
-            ast::TypeKind::Map { key, value } => {
-                crate::core::Type::Map(Box::new(convert_type(key)), Box::new(convert_type(value)))
-            }
-        }
-    }
-
-    fn convert_scalar(s: &ast::ScalarType) -> crate::core::Scalar {
-        match s {
-            ast::ScalarType::Bit => crate::core::Scalar::Bit,
-            ast::ScalarType::Bool => crate::core::Scalar::Bool,
-            ast::ScalarType::Byte => crate::core::Scalar::Byte,
-            ast::ScalarType::Float32 => crate::core::Scalar::Float32,
-            ast::ScalarType::Float64 => crate::core::Scalar::Float64,
-            ast::ScalarType::Int8 => crate::core::Scalar::SignedInt8,
-            ast::ScalarType::Int16 => crate::core::Scalar::SignedInt16,
-            ast::ScalarType::Int32 => crate::core::Scalar::SignedInt32,
-            ast::ScalarType::Int64 => crate::core::Scalar::SignedInt64,
-            ast::ScalarType::Uint8 => crate::core::Scalar::UnsignedInt8,
-            ast::ScalarType::Uint16 => crate::core::Scalar::UnsignedInt16,
-            ast::ScalarType::Uint32 => crate::core::Scalar::UnsignedInt32,
-            ast::ScalarType::Uint64 => crate::core::Scalar::UnsignedInt64,
-            ast::ScalarType::String => crate::core::Scalar::String,
-        }
-    }
-
-    fn register_enm(registry: &mut Registry, scope: Descriptor, enm: &ast::Enum) -> Descriptor {
-        debug_assert!(scope.name.is_none());
-
-        let mut variants: Vec<_> = enm.variants.iter().collect();
-        variants.sort_by_key(|v| v.index.value);
-
-        let d = DescriptorBuilder::default()
-            .package(scope.package)
-            .path(scope.path)
-            .name(enm.name.name.clone())
-            .build()
-            .unwrap();
-
-        let e = EnumBuilder::default()
-            .comment(
-                enm.doc
-                    .as_ref()
-                    .map(|doc| doc.lines.clone())
-                    .unwrap_or_default(),
-            )
-            .name(enm.name.name.clone())
-            .variants(
-                variants
-                    .into_iter()
-                    .map(|v| match &v.kind {
-                        ast::VariantKind::Field(f) => {
-                            crate::core::VariantKind::Field(convert_field(f))
-                        }
-                        ast::VariantKind::Unit(ident) => crate::core::VariantKind::Variant(
-                            crate::core::VariantBuilder::default()
-                                .comment(
-                                    v.doc
-                                        .as_ref()
-                                        .map(|doc| doc.lines.clone())
-                                        .unwrap_or_default(),
-                                )
-                                .name(ident.name.clone())
-                                .build()
-                                .unwrap(),
-                        ),
-                    })
-                    .collect(),
-            )
-            .build()
-            .unwrap();
-
-        registry.insert(d.clone(), registry::Kind::Enum(e));
-
-        d
-    }
-
-    fn register_msg(registry: &mut Registry, scope: Descriptor, msg: &ast::Message) -> Descriptor {
-        debug_assert!(scope.name.is_none());
-
-        let mut fields: Vec<_> = msg.fields.iter().collect();
-        fields.sort_by_key(|f| f.index.value);
-
-        let d = DescriptorBuilder::default()
-            .package(scope.package.clone())
-            .path(scope.path.clone())
-            .name(msg.name.name.clone())
-            .build()
-            .unwrap();
-
-        let mut m = MessageBuilder::default()
-            .comment(
-                msg.doc
-                    .as_ref()
-                    .map(|doc| doc.lines.clone())
-                    .unwrap_or_default(),
-            )
-            .name(msg.name.name.clone())
-            .fields(fields.into_iter().map(convert_field).collect())
-            .build()
-            .unwrap();
-
-        let mut scope = scope.clone();
-        scope.path.push(msg.name.name.clone());
-
-        m.enums = msg
-            .nested_enums
-            .iter()
-            .map(|enm| register_enm(registry, scope.clone(), enm))
-            .collect();
-
-        m.messages = msg
-            .nested_messages
-            .iter()
-            .map(|m| register_msg(registry, scope.clone(), m))
-            .collect();
-
-        registry.insert(d.clone(), registry::Kind::Message(m));
-
-        d
-    }
-
-    let scope = DescriptorBuilder::default()
-        .package(package.clone())
-        .build()
-        .unwrap();
-
-    for item in &ast.items {
-        match item {
-            Item::Enum(enm) => {
-                let d = register_enm(registry, scope.clone(), enm);
-                module.enums.push(d);
-            }
-            Item::Message(msg) => {
-                let d = register_msg(registry, scope.clone(), msg);
-                module.messages.push(d);
-            }
-        }
-    }
-
-    registry.insert(scope, registry::Kind::Module(module));
-
-    Ok(())
+    todo!() // TODO: Replace this with new parsing implementation.
 }
 
 /* ------------------------ Fn: resolve_include_path ------------------------ */
