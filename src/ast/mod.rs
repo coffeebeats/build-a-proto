@@ -138,71 +138,33 @@ pub enum VariantKind {
 /* -------------------------------------------------------------------------- */
 
 /// `Ident` represents an identifier with its source location.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("{}", name)]
 pub struct Ident {
     pub name: String,
-    pub span: Span,
+    pub span: crate::lex::Span,
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             Struct: DocComment                             */
+/*                                Struct: Text                                */
 /* -------------------------------------------------------------------------- */
 
-/// `DocComment` represents documentation comments attached to a declaration.
-#[derive(Clone, Debug, PartialEq)]
-pub struct DocComment {
-    pub lines: Vec<String>,
-    pub span: Span,
+/// `Text` represents a single [`String`] literal with its source location.
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("\"{}\"", content)]
+pub struct Text {
+    pub content: String,
+    pub span: crate::lex::Span,
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             Struct: FieldIndex                             */
+/*                                Struct: Uint                                */
 /* -------------------------------------------------------------------------- */
 
-/// `FieldIndex` represents a field or variant index with its source location.
-#[derive(Builder, Clone, Debug, PartialEq)]
-pub struct FieldIndex {
-    pub span: Span,
-    pub value: u64,
-}
-
-/* -------------------------------------------------------------------------- */
-/*                             Struct: EncodingSpec                           */
-/* -------------------------------------------------------------------------- */
-
-/// `EncodingSpec` represents encoding specifications for a field.
-#[derive(Clone, Debug, PartialEq)]
-pub struct EncodingSpec {
-    pub encodings: Vec<Encoding>,
-    pub span: Span,
-}
-
-/* -------------------------------------------------------------------------- */
-/*                              Enum: Encoding                                */
-/* -------------------------------------------------------------------------- */
-
-/// `Encoding` specifies how a field should be encoded in the wire format. Note
-/// that the wrapped integer types should be later validated that they meet
-/// documented size limits.
-#[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
-pub enum Encoding {
-    /// Fixed-size bit encoding (must be less than size of integer type).
-    Bits(u64),
-
-    /// Variable-length bit encoding with a maximum size (must be less than
-    /// size of integer type).
-    BitsVariable(u64),
-
-    /// Delta encoding (difference from previous value).
-    Delta,
-
-    /// Fixed-point encoding with integer and fractional bits.
-    FixedPoint(u64, u64),
-
-    /// Padding bits.
-    Pad(u64),
-
-    /// ZigZag encoding for signed integers.
-    ZigZag,
+/// `Uint` represents an unsigned integer with its source location.
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("{}", value)]
+pub struct Uint<T = u64> {
+    pub value: T,
+    pub span: crate::lex::Span,
 }
