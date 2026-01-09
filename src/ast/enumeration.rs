@@ -1,3 +1,5 @@
+use derive_more::Display;
+
 use crate::ast;
 use crate::lex::Span;
 
@@ -6,7 +8,8 @@ use crate::lex::Span;
 /* -------------------------------------------------------------------------- */
 
 /// `Enum` represents an enum definition.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("enum {}", name)]
 pub struct Enum {
     pub comment: Option<ast::CommentBlock>,
     pub items: Vec<EnumItem>,
@@ -18,7 +21,7 @@ pub struct Enum {
 
 /// `EnumItem` represents a top-level item within an [`Enum`].
 #[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EnumItem {
     CommentBlock(ast::CommentBlock),
     FieldVariant(ast::Field),
@@ -31,7 +34,7 @@ pub enum EnumItem {
 
 /// `UnitVariant` represents a simple [`Enum`] variant which is just an
 /// identifier.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UnitVariant {
     pub comment: Option<ast::CommentBlock>,
     pub index: Option<ast::FieldIndex>,

@@ -1,3 +1,5 @@
+use derive_more::Display;
+
 use crate::ast;
 use crate::lex::Span;
 
@@ -6,7 +8,8 @@ use crate::lex::Span;
 /* -------------------------------------------------------------------------- */
 
 /// `Message` represents a message definition.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("message {}", name)]
 pub struct Message {
     pub comment: Option<ast::CommentBlock>,
     pub items: Vec<MessageItem>,
@@ -18,7 +21,7 @@ pub struct Message {
 
 /// `MessageItem` represents a top-level item within a [`Message`].
 #[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MessageItem {
     CommentBlock(ast::CommentBlock),
     Enum(ast::Enum),
@@ -31,7 +34,7 @@ pub enum MessageItem {
 /* -------------------------------------------------------------------------- */
 
 /// `Field` represents a field within a [`ast::Message`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Field {
     pub comment: Option<ast::CommentBlock>,
     pub encoding: Option<ast::Encoding>,
@@ -47,7 +50,7 @@ pub struct Field {
 
 /// `FieldIndex` represents a field or variant index within a [`ast::Message`]
 /// or [`ast::Enum`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FieldIndex {
     pub span: Span,
     pub value: ast::Uint,

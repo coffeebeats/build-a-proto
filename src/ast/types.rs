@@ -9,7 +9,7 @@ use crate::lex::Span;
 
 /// `Type` is a parsed type with its source location.
 #[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
 pub enum Type {
     /// An array type with an optional fixed size.
     Array(Array),
@@ -30,7 +30,8 @@ pub enum Type {
 
 /// `Reference` defines a reference to another [`crate::ast::Type`],
 /// [`crate::ast::Message`], or [`crate::ast::Enum`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("{}{}", if self.is_absolute { "." } else { "" }, itertools::join(components, "."))]
 pub struct Reference {
     pub components: Vec<super::Ident>,
     pub is_absolute: bool,
@@ -42,7 +43,8 @@ pub struct Reference {
 /* -------------------------------------------------------------------------- */
 
 /// `Scalar` represents a [`ScalarType`] definition.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("{}", kind)]
 pub struct Scalar {
     pub kind: ScalarType,
     pub span: Span,
@@ -52,7 +54,7 @@ pub struct Scalar {
 
 /// `ScalarType` enumerates the primitive types supported by the schema language.
 #[allow(unused)]
-#[derive(Clone, Debug, Display, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
 pub enum ScalarType {
     #[display("bit")]
     Bit,
@@ -89,7 +91,8 @@ pub enum ScalarType {
 /* -------------------------------------------------------------------------- */
 
 /// `Array` represents an array type declaration.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("[{}]", element)]
 pub struct Array {
     pub element: Box<Type>,
     pub size: Option<ast::Uint>,
@@ -101,7 +104,8 @@ pub struct Array {
 /* -------------------------------------------------------------------------- */
 
 /// `Map` represents an array type declaration.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("[{}]{}", key, value)]
 pub struct Map {
     pub key: Box<Type>,
     pub value: Box<Type>,

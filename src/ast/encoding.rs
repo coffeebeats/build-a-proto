@@ -1,3 +1,6 @@
+use derive_more::Display;
+use itertools::Itertools;
+
 use crate::ast;
 use crate::lex::Span;
 
@@ -6,7 +9,8 @@ use crate::lex::Span;
 /* -------------------------------------------------------------------------- */
 
 /// `Encoding` represents encoding specifications for a field.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[display("[{}]", encodings.iter().join(","))]
 pub struct Encoding {
     pub encodings: Vec<EncodingKind>,
     pub span: Span,
@@ -17,7 +21,7 @@ pub struct Encoding {
 /// `EncodingKind` specifies how a field should be encoded in the wire format.
 /// Note that the wrapped integer types should be later validated that they meet
 /// the appropriate size limits.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
 pub enum EncodingKind {
     /// Fixed-size bit encoding (must be less than size of integer type).
     Bits(ast::Uint),
@@ -30,6 +34,7 @@ pub enum EncodingKind {
     Delta,
 
     /// Fixed-point encoding with integer and fractional bits.
+    #[display("fixed_point({},{})", 0, 1)]
     FixedPoint(ast::Uint, ast::Uint),
 
     /// Padding bits.
