@@ -7,7 +7,7 @@ use super::Visitor;
 /* -------------------------------------------------------------------------- */
 
 /// `Visitable` defines an AST node that can be "visited" to traverse the node's
-///  contents. Each type's implementation dispatches to the appropriate "walk"
+/// contents. Each type's implementation dispatches to the appropriate "walk"
 /// functions.
 #[allow(unused)]
 pub trait Visitable<'ast, V: Visitor<'ast>> {

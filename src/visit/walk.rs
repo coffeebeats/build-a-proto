@@ -90,7 +90,7 @@ pub fn walk_map<'ast, V: Visitor<'ast>>(visitor: &mut V, map: &'ast ast::Map) {
 
 /* ----------------------------- Struct: Package ---------------------------- */
 
-/// Walks a [`ast::Package`], visiting all component identifiers.
+/// Walks a [`ast::Package`], visiting comment and all component identifiers.
 #[inline]
 pub fn walk_package<'ast, V: Visitor<'ast>>(visitor: &mut V, package: &'ast ast::Package) {
     package.comment.visit(visitor);
