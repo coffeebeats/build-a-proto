@@ -5,6 +5,7 @@ mod core;
 mod generate;
 mod lex;
 mod parse;
+mod visit;
 
 use anyhow::Result;
 use clap::Parser;
