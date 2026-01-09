@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::ast;
-use crate::ast::Item;
-use crate::ast::SourceFile;
+use crate::ast::Schema;
 use crate::core::Descriptor;
 use crate::core::DescriptorBuilder;
 use crate::core::ImportRoot;
@@ -13,9 +12,7 @@ use crate::core::SchemaImport;
 use crate::lex::Span;
 use crate::parse::ParseError;
 
-use super::symbol::ModuleMetadata;
 use super::symbol::Symbols;
-use super::symbol::TypeKind;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Context                              */
@@ -31,7 +28,7 @@ pub struct Context {
     pub symbols: Symbols,
     /// `source_files` are parsed ASTs per schema, preserving spans for
     /// later validation.
-    pub source_files: HashMap<SchemaImport, SourceFile>,
+    pub source_files: HashMap<SchemaImport, Schema>,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -46,77 +43,19 @@ pub struct Context {
 /// 3. Stores the original parsed AST for later validation
 #[allow(unused)]
 pub fn register<'src>(
-    ctx: &mut Context,
-    import_roots: &[ImportRoot],
-    schema_import: &SchemaImport,
-    ast: SourceFile,
+    _: &mut Context,
+    _: &[ImportRoot],
+    _: &SchemaImport,
+    _: Schema,
 ) -> Result<(), ParseError<'src>> {
-    let pkg = ast.package.name.clone();
-
-    let mut deps = Vec::new();
-    let mut type_descriptors = Vec::new();
-
-    for include in &ast.includes {
-        deps.push(resolve_include_path(
-            &include.path,
-            import_roots,
-            include.span,
-        )?);
-    }
-
-    for item in &ast.items {
-        match item {
-            Item::Enum(enm) => {
-                let descriptor = build_descriptor(&pkg, &[], &enm.name.name);
-                ctx.symbols
-                    .insert_type(descriptor.clone(), TypeKind::Variant);
-                type_descriptors.push(descriptor);
-            }
-            Item::Message(msg) => {
-                let descriptor = build_descriptor(&pkg, &[], &msg.name.name);
-                ctx.symbols
-                    .insert_type(descriptor.clone(), TypeKind::Message);
-                type_descriptors.push(descriptor.clone());
-
-                register_nested_types(&mut ctx.symbols, &pkg, &[&msg.name.name], msg);
-            }
-        }
-    }
-
-    let metadata = ModuleMetadata {
-        package: pkg,
-        deps,
-        types: type_descriptors,
-    };
-
-    ctx.symbols.insert_module(schema_import.clone(), metadata);
-    ctx.source_files.insert(schema_import.clone(), ast);
-
-    Ok(())
+    todo!() // TODO: Replace this with new parsing implementation.
 }
 
 /* ----------------------- Fn: register_nested_types ------------------------ */
 
 /// Recursively registers nested messages and enums within a message.
-fn register_nested_types(
-    symbols: &mut Symbols,
-    package: &PackageName,
-    path: &[&str],
-    msg: &ast::Message,
-) {
-    for enm in &msg.nested_enums {
-        let descriptor = build_descriptor(package, path, &enm.name.name);
-        symbols.insert_type(descriptor, TypeKind::Variant);
-    }
-
-    for nested_msg in &msg.nested_messages {
-        let mut nested_path: Vec<&str> = path.to_vec();
-        nested_path.push(&nested_msg.name.name);
-        let descriptor = build_descriptor(package, path, &nested_msg.name.name);
-        symbols.insert_type(descriptor, TypeKind::Message);
-
-        register_nested_types(symbols, package, &nested_path, nested_msg);
-    }
+fn register_nested_types(_: &mut Symbols, _: &PackageName, _: &[&str], _: &ast::Message) {
+    todo!() // TODO: Replace this with new parsing implementation.
 }
 
 /* ------------------------- Fn: build_descriptor --------------------------- */
