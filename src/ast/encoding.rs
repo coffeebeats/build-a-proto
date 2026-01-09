@@ -24,22 +24,27 @@ pub struct Encoding {
 #[derive(Clone, Debug, Display, Eq, PartialEq)]
 pub enum EncodingKind {
     /// Fixed-size bit encoding (must be less than size of integer type).
+    #[display("bits({_0})")]
     Bits(ast::Uint),
 
     /// Variable-length bit encoding with a maximum size (must be less than
     /// size of integer type).
+    #[display("bits(var({_0}))")]
     BitsVariable(ast::Uint),
 
     /// Delta encoding (difference from previous value).
+    #[display("delta")]
     Delta,
 
     /// Fixed-point encoding with integer and fractional bits.
-    #[display("fixed_point({},{})", 0, 1)]
+    #[display("fixed_point({_0},{_1})")]
     FixedPoint(ast::Uint, ast::Uint),
 
     /// Padding bits.
+    #[display("pad({_0})")]
     Pad(ast::Uint),
 
     /// ZigZag encoding for signed integers.
+    #[display("zig_zag")]
     ZigZag,
 }
