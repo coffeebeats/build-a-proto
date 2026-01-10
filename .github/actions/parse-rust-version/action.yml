@@ -18,12 +18,51 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Define common 'rust' properties
+      id: rs-props
+      shell: bash
+      run: |
+        RUSTC_VERSION="$(rustc --version | sed 's/rustc \(.*\) (.*/\1/')"
+        echo "rustc=$RUSTC_VERSION" >> $GITHUB_OUTPUT
+        echo "set rustc=$RUSTC_VERSION"
+
+        PY_RELPATH='import os,sys; print(os.path.relpath(sys.stdin.read()))'
+        CRATE_DIR="$(echo $(dirname ${{ inputs.manifest }}) | python3 -c "$PY_RELPATH")"
+        echo "crate_dir=$CRATE_DIR" >> $GITHUB_OUTPUT
+        echo "set crate_dir=$CRATE_DIR"
+
+        HOST_TRIPLE="$(rustc -v --version | grep host | sed 's/.*[ ]//')"
+        PLATFORM="$(t="${{ inputs.platform }}"; echo "${t:-$HOST_TRIPLE}")"
+        echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
+        echo "set platform=$PLATFORM"
+
+    - name: Cache 'cargo' registry
+      id: cache-cargo-registry
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+      if: inputs.skip_cache != 'true'
+      with:
+        key: >-
+          cache-cargo-registry-
+          ${{ runner.os }}-
+          ${{ steps.rs-props.outputs.platform }}-
+          ${{ steps.rs-props.outputs.rustc }}-
+          ${{ hashFiles(
+            format('{0}/Cargo.lock', steps.rs-props.outputs.crate_dir)
+          ) }}
+        path: |
+          ~/.cargo/git/db/
+          ~/.cargo/registry
+        restore-keys: |
+          cache-cargo-registry- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}- ${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-registry- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}-
+          cache-cargo-registry- ${{ runner.os }}-
+
     - name: Parse Rust version from 'Cargo.toml'
       id: parse-config
       shell: bash
       run: |
         RUST_VERSION=$(
-          cargo metadata --offline --locked --manifest-path ${{ inputs.manifest }} --format-version 1 |
+          cargo metadata --manifest-path ${{ inputs.manifest }} --format-version 1 |
           python3 -c "import json,sys;print(next(filter(lambda p: p.get('name', '') == 'baproto', json.load(sys.stdin)['packages']))['rust_version'])"
         )
 
