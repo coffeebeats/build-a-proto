@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 
 use chumsky::Parser;
@@ -7,14 +6,10 @@ use chumsky::prelude::*;
 use thiserror::Error;
 
 use crate::ast;
-use crate::core::PackageName;
-use crate::core::Reference;
 
-use crate::lex::Keyword;
 use crate::lex::Span;
 use crate::lex::Spanned;
 use crate::lex::Token;
-use crate::lex::spanned;
 
 /* -------------------------------------------------------------------------- */
 /*                            Enum: ImportPathError                           */
@@ -56,17 +51,8 @@ pub struct ParseResult<'src> {
 pub type ParseError<'src> = Rich<'src, Token<'src>, Span>;
 
 /// `parse` parses an input [`Token`] sequence into an [`ast::SourceFile`].
-pub fn parse<'src>(input: &'src Vec<Spanned<Token<'src>>>, size: usize) -> ParseResult<'src> {
-    let (ast, errors) = parser()
-        .parse(input.as_slice().map(Span::from(size..size), |spanned| {
-            (&spanned.inner, &spanned.span)
-        }))
-        .into_output_errors();
-
-    ParseResult {
-        ast: ast.flatten(),
-        errors,
-    }
+pub fn parse<'src>(_input: &'src Vec<Spanned<Token<'src>>>, _size: usize) -> ParseResult<'src> {
+    todo!()
 }
 
 /* ------------------------------- Fn: parser ------------------------------- */
