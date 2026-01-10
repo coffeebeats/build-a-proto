@@ -97,47 +97,11 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
             if args.bindings.cpp { "cpp" } else { "gdscript" }
         );
 
-        let contents = std::fs::read_to_string(path).map_err(|e| anyhow!(e))?;
-
-        let (tokens, lex_errs) = lex(&contents);
-        for err in lex_errs {
-            report_error(path, &contents, err.map_token(|t| t.to_string()));
-        }
-
-        let mut parse_succeeded = true;
-
-        if let Some(tokens) = tokens.as_ref() {
-            let result = parse(tokens, contents.len());
-            for err in result.errors {
-                report_error(path, &contents, err.map_token(|t| t.to_string()));
-            }
-
-            if let Some(ast) = result.ast {
-                if let Err(err) = prepare(&schema_import, &import_roots, &mut reg, &ast) {
-                    report_error(path, &contents, err.map_token(|t| t.to_string()));
-                    parse_succeeded = false;
-                }
-            }
-        }
-
-        if !parse_succeeded {
-            failed.push(path.to_path_buf());
-        }
-
-        // Queue imported modules for processing.
-        for (_, m) in reg.iter_modules() {
-            for dep in &m.deps {
-                if !seen.contains(dep) {
-                    files.push_back(dep.clone());
-                }
-            }
-        }
-
-        seen.insert(schema_import);
+        todo!()
     }
 
     // Link phase: validate dependencies and detect cycles
-    link(&reg)?;
+    // link(&reg)?;
 
     // Compile phase: type validation (future)
     compile(&mut reg).map_err(|e| anyhow!(e))?;
