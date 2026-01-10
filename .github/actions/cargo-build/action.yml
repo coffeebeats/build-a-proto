@@ -55,48 +55,68 @@ runs:
         echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
         echo "set platform=$PLATFORM"
 
-    - name: Cache 'cargo' home directory
-      id: cache-cargo-home
+    - name: Cache 'cargo' crates
+      id: cache-cargo-crates
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
       if: inputs.skip_cache != 'true'
       with:
-        key: cache-cargo-home-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-${{ inputs.use_cross }}-${{ hashFiles('.github/workflows/**') }}
+        key: >-
+          cache-cargo-crates-
+          ${{ runner.os }}-
+          ${{ steps.rs-props.outputs.rustc }}-
+          ${{ inputs.use_cross }}-
+          ${{ hashFiles('.github/workflows/**') }}
         path: |
           ~/.cargo/.crates.toml
           ~/.cargo/.crates2.json
           ~/.cargo/bin
         restore-keys: |
-          cache-cargo-home-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-${{ inputs.use_cross }}-
-          cache-cargo-home-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-
-          cache-cargo-home-${{ runner.os }}-
+          cache-cargo-crates- ${{ runner.os }}- ${{ steps.rs-props.outputs.rustc }}- ${{ inputs.use_cross }}-
+          cache-cargo-crates- ${{ runner.os }}- ${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-crates- ${{ runner.os }}-
 
     - name: Cache 'cargo' registry
       id: cache-cargo-registry
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
       if: inputs.skip_cache != 'true'
       with:
-        key: cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-${{ hashFiles('Cargo.lock') }}
+        key: >-
+          cache-cargo-registry-${{ runner.os }}-
+          ${{ steps.rs-props.outputs.platform }}-
+          ${{ steps.rs-props.outputs.rustc }}-
+          ${{ hashFiles(
+            format('{0}/Cargo.lock', steps.rs-props.outputs.crate_dir)
+          ) }}
         path: |
           ~/.cargo/git/db/
           ~/.cargo/registry
         restore-keys: |
-          cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-
-          cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-
-          cache-cargo-registry-${{ runner.os }}-
+          cache-cargo-registry- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}- ${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-registry- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}-
+          cache-cargo-registry- ${{ runner.os }}-
 
     - name: Cache 'cargo' build artifacts
       id: cache-cargo-build
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
       if: inputs.skip_cache != 'true'
       with:
-        key: cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-${{ hashFiles('src/**/*.rs', 'Cargo.toml', 'Cargo.lock', '.cargo/config.toml') }}
+        key: >-
+          cache-cargo-build-${{ runner.os }}-
+          ${{ steps.rs-props.outputs.platform }}-
+          ${{ steps.rs-props.outputs.rustc }}-
+          ${{ hashFiles(
+            format('{0}/src/**/*.rs', steps.rs-props.outputs.crate_dir),
+            format('{0}/Cargo.toml', steps.rs-props.outputs.crate_dir),
+            format('{0}/Cargo.lock', steps.rs-props.outputs.crate_dir),
+            format('{0}/.cargo/config.toml', steps.rs-props.outputs.crate_dir)
+          ) }}
         path: |
           ${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml
           ${{ steps.rs-props.outputs.crate_dir }}/target
           ${{ steps.rs-props.outputs.crate_dir }}/vendor
         restore-keys: |
-          cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-
-          cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-
+          cache-cargo-build- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}- ${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-build- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}-
 
     - name: Install 'cross' for cross-compilation
       if: |
