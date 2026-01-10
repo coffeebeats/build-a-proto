@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
+use crate::core::PathValidationError;
 use crate::core::Registry;
 use crate::core::SchemaImport;
-use crate::core::path::PathValidationError;
 
 /* -------------------------------------------------------------------------- */
 /*                              Enum: LinkError                               */
@@ -115,10 +115,10 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::core::DescriptorBuilder;
+    use crate::core::Kind;
     use crate::core::Module;
     use crate::core::ModuleBuilder;
     use crate::core::PackageName;
-    use crate::core::registry::Kind;
 
     use super::*;
 

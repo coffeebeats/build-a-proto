@@ -1,5 +1,7 @@
+use derive_more::Display;
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use thiserror::Error;
 
 /* -------------------------------------------------------------------------- */
@@ -74,46 +76,26 @@ impl ImportRoot {
 
     /// `resolve_schema_import` resolves the provided relative path within this
     /// import root to a validated schema import.
-    ///
-    /// This method:
-    ///     1. Joins the path to the import root
-    ///     2. Validates it's a file
-    ///     3. Canonicalizes it
-    ///     4. Ensures it doesn't escape the import root (symlink defense)
-    ///     5. Returns a validated `SchemaImport`
-    /// ```
     pub fn resolve_schema_import<T>(&self, path: T) -> Result<SchemaImport, PathValidationError>
     where
         T: AsRef<Path>,
     {
-        let candidate = self.0.join(path);
+        let path = self.0.join(path);
 
-        if !candidate.exists() {
-            return Err(PathValidationError::DoesNotExist { path: candidate });
-        }
-
-        if !candidate.is_file() {
-            return Err(PathValidationError::NotAFile { path: candidate });
-        }
-
-        let canonical = candidate
-            .canonicalize()
-            .map_err(|e| PathValidationError::InvalidPath {
-                path: candidate.clone(),
-                source: e,
-            })?;
+        let import = SchemaImport::try_from(path)?;
+        let path = import.as_path();
 
         // Ensure the canonical path doesn't escape the import root. This
         // defends against symlink attacks and relative filepaths that could
         // leak filesystem info.
-        if !canonical.starts_with(&self.0) {
+        if !path.starts_with(&self.0) {
             return Err(PathValidationError::PathEscapesRoot {
-                path: canonical,
+                path: path.to_owned(),
                 root: self.0.clone(),
             });
         }
 
-        SchemaImport::try_from(canonical)
+        Ok(import)
     }
 }
 
@@ -184,8 +166,11 @@ impl AsRef<Path> for ImportRoot {
 ///     1. The path must point to a file (not a directory)
 ///     2. The path is canonicalized (absolute, symlinks resolved)
 ///     3. The file has a `.baproto` extension
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SchemaImport(PathBuf);
+///
+/// Uses `Rc` for cheap cloning (important for span contexts).
+#[derive(Clone, Debug, Default, Display, PartialEq, Eq, Hash)]
+#[display("{}", self.0.display())]
+pub struct SchemaImport(Rc<PathBuf>);
 
 /* --------------------------- Impl: SchemaImport --------------------------- */
 
@@ -202,6 +187,14 @@ impl SchemaImport {
     #[allow(unused)]
     pub fn exists(&self) -> bool {
         self.0.exists()
+    }
+
+    /// Creates an anonymous schema import for testing/ephemeral parsing.
+    ///
+    /// This allows lexing and parsing code that isn't from a real file.
+    #[cfg(test)]
+    pub fn anonymous() -> Self {
+        Self(Rc::new(PathBuf::from("<anonymous>")))
     }
 }
 
@@ -236,7 +229,7 @@ impl TryFrom<&Path> for SchemaImport {
                 source: e,
             })?;
 
-        Ok(Self(canonical))
+        Ok(Self(Rc::new(canonical)))
     }
 }
 
@@ -264,7 +257,7 @@ impl<'a> TryFrom<&'a str> for SchemaImport {
 
 impl AsRef<Path> for SchemaImport {
     fn as_ref(&self) -> &Path {
-        &self.0
+        self.0.as_ref()
     }
 }
 

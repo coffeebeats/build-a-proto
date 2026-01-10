@@ -1,42 +1,41 @@
-pub mod descriptor;
-pub mod enumeration;
-pub mod message;
-pub mod package;
-pub mod path;
-pub mod reference;
-pub mod registry;
-pub mod types;
-
 /* ----------------------------- Mod: Descriptor ---------------------------- */
 
+mod descriptor;
 pub use descriptor::*;
 
 /* ---------------------------- Mod: Enumeration ---------------------------- */
 
+mod enumeration;
 pub use enumeration::*;
 
 /* ------------------------------ Mod: Message ------------------------------ */
 
+mod message;
 pub use message::*;
 
 /* ------------------------------ Mod: Package ------------------------------ */
 
+mod package;
 pub use package::*;
 
-/* -------------------------------- Mod: Path ------------------------------- */
+/* ------------------------------- Mod: Import ------------------------------ */
 
-pub use path::*;
+mod import;
+pub use import::*;
 
 /* ----------------------------- Mod: Reference ----------------------------- */
 
+mod reference;
 pub use reference::*;
 
 /* ------------------------------ Mod: Registry ----------------------------- */
 
+mod registry;
 pub use registry::*;
 
 /* ------------------------------- Mod: Types ------------------------------- */
 
+mod types;
 pub use types::*;
 
 /* -------------------------------------------------------------------------- */
