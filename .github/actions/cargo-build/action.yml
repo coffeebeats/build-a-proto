@@ -61,7 +61,8 @@ runs:
       if: inputs.skip_cache != 'true'
       with:
         key: >-
-          cache-cargo-crates-${{ runner.os }}-
+          cache-cargo-crates-
+          ${{ runner.os }}-
           ${{ steps.rs-props.outputs.rustc }}-
           ${{ inputs.use_cross }}-
           ${{ hashFiles('.github/workflows/**') }}
@@ -70,9 +71,9 @@ runs:
           ~/.cargo/.crates2.json
           ~/.cargo/bin
         restore-keys: |
-          cache-cargo-crates-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-${{ inputs.use_cross }}-
-          cache-cargo-crates-${{ runner.os }}-${{ steps.rs-props.outputs.rustc }}-
-          cache-cargo-crates-${{ runner.os }}-
+          cache-cargo-crates- ${{ runner.os }}- ${{ steps.rs-props.outputs.rustc }}- ${{ inputs.use_cross }}-
+          cache-cargo-crates- ${{ runner.os }}- ${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-crates- ${{ runner.os }}-
 
     - name: Cache 'cargo' registry
       id: cache-cargo-registry
@@ -90,9 +91,9 @@ runs:
           ~/.cargo/git/db/
           ~/.cargo/registry
         restore-keys: |
-          cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-
-          cache-cargo-registry-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-
-          cache-cargo-registry-${{ runner.os }}-
+          cache-cargo-registry- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}- ${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-registry- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}-
+          cache-cargo-registry- ${{ runner.os }}-
 
     - name: Cache 'cargo' build artifacts
       id: cache-cargo-build
@@ -114,8 +115,8 @@ runs:
           ${{ steps.rs-props.outputs.crate_dir }}/target
           ${{ steps.rs-props.outputs.crate_dir }}/vendor
         restore-keys: |
-          cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-${{ steps.rs-props.outputs.rustc }}-
-          cache-cargo-build-${{ runner.os }}-${{ steps.rs-props.outputs.platform }}-
+          cache-cargo-build- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}- ${{ steps.rs-props.outputs.rustc }}-
+          cache-cargo-build- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}-
 
     - name: Install 'cross' for cross-compilation
       if: |
