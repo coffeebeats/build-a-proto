@@ -109,7 +109,7 @@ where
         .then_ignore(just(Token::Colon))
         .map_with(|value, e| ast::FieldIndex {
             span: e.span(),
-            value: value,
+            value,
         })
 }
 

@@ -10,16 +10,12 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::compile::compile;
-use crate::compile::link;
-use crate::compile::prepare;
 use crate::core::ImportRoot;
 use crate::core::Registry;
 use crate::core::SchemaImport;
 use crate::generate;
 use crate::generate::FileWriter;
 use crate::generate::generate;
-use crate::lex::lex;
-use crate::parse::parse;
 
 /* -------------------------------------------------------------------------- */
 /*                                Struct: Args                                */
@@ -75,12 +71,12 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
         .map(|path| SchemaImport::try_from(path).map_err(|e| anyhow!(e)))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut seen = HashSet::<SchemaImport>::with_capacity(inputs.len());
+    let seen = HashSet::<SchemaImport>::with_capacity(inputs.len());
     let mut files = VecDeque::<SchemaImport>::from(inputs);
 
-    let import_roots = parse_import_roots(args.import_roots)?;
+    let _import_roots = parse_import_roots(args.import_roots)?;
 
-    let mut failed: Vec<PathBuf> = vec![];
+    let failed: Vec<PathBuf> = vec![];
     while !files.is_empty() {
         let schema_import = files.pop_front().unwrap();
 
