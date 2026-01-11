@@ -11,9 +11,6 @@ use crate::parse;
 /*                                 Fn: schema                                 */
 /* -------------------------------------------------------------------------- */
 
-// FIXME: HANDLE LINE COMMENTS EVERYWHERE
-// FIXME: ADD ERROR RECOVERY (`.recover_with(skip_then_retry_until(any().ignored(), end()))`)
-
 /// `schema` creates a new [`Parser`] that parses a 'baproto' schema.
 pub(super) fn schema<'src, I>(
     depth_limit: usize,
