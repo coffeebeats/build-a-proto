@@ -82,7 +82,7 @@ mod tests {
 
     /* ------------------------ Tests: comment_block ------------------------ */
 
-     #[test]
+    #[test]
     fn test_comment_block_without_trailing_newline_fails() {
         // Given: A comment without a trailing newline.
         let input = "// No trailing newline";

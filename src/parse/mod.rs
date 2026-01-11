@@ -150,13 +150,13 @@ pub(self) mod tests {
     ///
     /// This uses chumsky's `MappedInput` to split `Spanned<Token, Span>`
     /// elements into separate token and span components.
-    pub(in super) type TestParserInput<'src> =
+    pub(super) type TestParserInput<'src> =
         MappedInput<'src, Token<'src>, Span, &'src [Spanned<Token<'src>, Span>]>;
 
     /* -------------------------- Fn: parse_single -------------------------- */
 
     /// Parse test input with the given parser.
-    pub(in super) fn parse_single<T, P>(
+    pub(super) fn parse_single<T, P>(
         input: &'static str,
         parser: P,
     ) -> (Option<T>, Vec<ParseError<'static>>)
