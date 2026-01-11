@@ -65,14 +65,19 @@ use chumsky::prelude::*;
 use chumsky::text::inline_whitespace;
 
 /// `lex` lexes an input string into [`Token`]s recognized by the parser.
-pub fn lex<'src>(
-    input: &'src str,
-    file: SchemaImport,
-) -> (
-    Option<Vec<Spanned<Token<'src>, Span>>>,
-    Vec<Rich<'src, char, Span>>,
-) {
-    lexer().parse(input.with_context(file)).into_output_errors()
+pub fn lex<'src>(input: &'src str, file: SchemaImport) -> LexResult<'src> {
+    let (tokens, errors) = lexer().parse(input.with_context(file)).into_output_errors();
+    LexResult { tokens, errors }
+}
+
+/* ---------------------------- Struct: LexResult --------------------------- */
+
+/// `LexResult` contains the result of lexing a `.baproto` file.
+pub struct LexResult<'src> {
+    /// `tokens` are the successfully parsed tokens, if any.
+    pub tokens: Option<Vec<Spanned<Token<'src>, Span>>>,
+    /// `errors` is the list of errors encountered during lexing.
+    pub errors: Vec<Rich<'src, char, Span>>,
 }
 
 /* -------------------------------- Fn: lexer ------------------------------- */
@@ -114,7 +119,7 @@ fn lexer<'src>()
 /* -------------------------------------------------------------------------- */
 
 #[cfg(test)]
-pub(self) mod tests {
+mod tests {
     use super::*;
 
     /* -------------------------- Fn: parse_single -------------------------- */

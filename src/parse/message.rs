@@ -52,9 +52,9 @@ where
             .labelled("message")
             .try_map(move |m, span| {
                 if let Ok(mut depth) = depth.try_borrow_mut() {
-                    *depth -= 1;
+                    *depth = depth.saturating_sub(1);
 
-                    if *depth <= 0 {
+                    if *depth == 0 {
                         let msg = format!("exceeded maximum type depth limit: {}", depth_limit);
                         return Err(Rich::custom(span, msg));
                     }
@@ -109,7 +109,7 @@ where
         .then_ignore(just(Token::Colon))
         .map_with(|value, e| ast::FieldIndex {
             span: e.span(),
-            value: value,
+            value,
         })
 }
 

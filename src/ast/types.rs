@@ -92,7 +92,7 @@ pub enum ScalarType {
 
 /// `Array` represents an array type declaration.
 #[derive(Clone, Debug, Display, Eq, PartialEq)]
-#[display("[{}]{}", element, self.size.as_ref().map(ast::Uint::to_string).unwrap_or(format!("")))]
+#[display("[{}]{}", element, self.size.as_ref().map(ast::Uint::to_string).unwrap_or_default())]
 pub struct Array {
     pub element: Box<Type>,
     pub size: Option<ast::Uint>,
