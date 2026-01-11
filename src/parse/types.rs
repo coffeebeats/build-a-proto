@@ -455,7 +455,7 @@ mod tests {
         assert_eq!(scalar.kind, ast::ScalarType::String);
     }
 
-    /* ---------------------------- Tests: string --------------------------- */
+    /* ----------------------------- Tests: map ----------------------------- */
 
     #[test]
     fn test_type_map_string_to_u64_succeeds() {

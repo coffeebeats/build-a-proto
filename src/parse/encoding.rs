@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn test_encoding_list_with_two_encodings_succeeds() {
         // Given: Multiple encodings in a list.
-        let input = "[\ndelta,\nbits(8)]";
+        let input = "[delta,bits(8)]";
 
         // When: The input is parsed.
         let encoding = assert_parse_succeeds(parse_single(input, encoding()));
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn test_encoding_list_with_three_encodings_succeeds() {
         // Given: Three encodings in a list.
-        let input = "[\ndelta,\nzigzag,\nbits(16)]";
+        let input = "[delta, zigzag, bits(16)]";
 
         // When: The input is parsed.
         let encoding = assert_parse_succeeds(parse_single(input, encoding()));
