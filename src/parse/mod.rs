@@ -137,9 +137,10 @@ where
 /* -------------------------------------------------------------------------- */
 
 #[cfg(test)]
-pub(self) mod tests {
-    use chumsky::input::{Input as _, MappedInput};
+mod tests {
+    use chumsky::input::MappedInput;
 
+    use crate::lex::LexResult;
     use crate::lex::Spanned;
 
     use super::*;
@@ -164,14 +165,14 @@ pub(self) mod tests {
         P: Parser<'static, TestParserInput<'static>, T, chumsky::extra::Err<ParseError<'static>>>,
     {
         let file = SchemaImport::anonymous();
-        let (tokens, lex_errors) = crate::lex::lex(input, file.clone());
+        let LexResult { tokens, errors } = crate::lex::lex(input, file.clone());
 
         assert!(
-            lex_errors.is_empty(),
+            errors.is_empty(),
             "Lexing failed with {} error(s) for input:\n{}\n\nErrors:\n{:?}",
-            lex_errors.len(),
+            errors.len(),
             input,
-            lex_errors
+            errors
         );
 
         let tokens = tokens.expect("tokens should exist after successful lexing");
