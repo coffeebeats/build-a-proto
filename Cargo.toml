@@ -3,7 +3,7 @@
   version      = "0.1.4"
   description  = "An interface definition language (IDL) compiler for creating custom, bit-level binary encodings with an emphasis on supporting networked simulations."
   edition      = "2024"
-  rust-version = "1.87.0"
+  rust-version = "1.92.0"
 
 [dependencies]
   anyhow         = "1.0.100"
