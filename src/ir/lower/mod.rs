@@ -117,9 +117,26 @@ impl<'a, R: TypeResolver> LowerContext<'a, R> {
 /* -------------------------------------------------------------------------- */
 
 #[cfg(test)]
-pub(self) struct MockResolver;
+pub(super) struct MockResolver {
+    pub result: Option<(String, TypeKind)>,
+}
 
-/* ---------------------------- Impl: TypeResolver -------------------------- */
+/* --------------------------- Impl: TypeResolver --------------------------- */
+
+#[cfg(test)]
+impl MockResolver {
+    /// Creates a `MockResolver` that returns `None` for all resolutions.
+    pub fn new() -> Self {
+        Self { result: None }
+    }
+
+    /// Creates a `MockResolver` that returns the specified result.
+    pub fn with_result(result: (String, TypeKind)) -> Self {
+        Self {
+            result: Some(result),
+        }
+    }
+}
 
 #[cfg(test)]
 impl TypeResolver for MockResolver {
@@ -129,7 +146,7 @@ impl TypeResolver for MockResolver {
         _reference: &[String],
         _is_absolute: bool,
     ) -> Option<(String, TypeKind)> {
-        None
+        self.result.clone()
     }
 }
 
@@ -138,11 +155,10 @@ impl TypeResolver for MockResolver {
 /* -------------------------------------------------------------------------- */
 
 #[cfg(test)]
-pub(self) fn make_context() -> LowerContext<'static, MockResolver> {
+pub(super) fn make_context<'a>(resolver: &'a MockResolver) -> LowerContext<'a, MockResolver> {
     use crate::core::DescriptorBuilder;
     use crate::core::PackageName;
 
-    let resolver = Box::leak(Box::new(MockResolver));
     let desc = DescriptorBuilder::default()
         .package(PackageName::try_from(vec!["test".to_string()]).unwrap())
         .build()
