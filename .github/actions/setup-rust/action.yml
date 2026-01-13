@@ -99,6 +99,6 @@ runs:
       run: |
         rustup show
 
-        echo "cargo_version=$(cargo --version)" >> $GITHUB_OUTPUT
-        echo "rustc_version=$(rustc --version)" >> $GITHUB_OUTPUT
-        echo "rustup_version=$(rustup --version)" >> $GITHUB_OUTPUT
+        echo "cargo_version=$(cargo --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+        echo "rustc_version=$(rustc --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
+        echo "rustup_version=$(rustup --version 2>/dev/null | cut -d' ' -f2)" >> $GITHUB_OUTPUT
