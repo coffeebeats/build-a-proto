@@ -162,14 +162,29 @@ jobs:
           version-file: Cargo.toml
           profile: minimal
 
+      # No source code changes
+
       - uses: "./.github/actions/cargo-build"
         if: ${{ needs.changes.outputs.has_source_change != 'true' }}
         with:
           profile: release
 
+      - name: Test source code
+        if: needs.changes.outputs.has_source_change != 'true'
+        run: |
+          cargo test \
+            --frozen \
+            --release \
+            --target=x86_64-unknown-linux-gnu \
+            --all-features \
+            --all-targets
+
+      # With source code changes
+
       - name: Cache 'cargo-llvm-cov'
         id: cache-cargo-llvm-cov
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        if: needs.changes.outputs.has_source_change == 'true'
         with:
           key: >-
             cache-cargo-llvm-cov-
@@ -219,16 +234,6 @@ jobs:
             --remap-path-prefix \
             --codecov \
             --output-path codecov.json
-
-      - name: Test source code
-        if: needs.changes.outputs.has_source_change != 'true'
-        run: |
-          cargo test \
-            --frozen \
-            --release \
-            --target=x86_64-unknown-linux-gnu \
-            --all-features \
-            --all-targets
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
