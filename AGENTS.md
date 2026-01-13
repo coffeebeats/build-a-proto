@@ -14,6 +14,7 @@ cargo fmt --check    # Check formatting
 ## Comment Headers
 
 80-char delimited, centered text. Types: `Struct`, `Enum`, `Type`, `Trait`, `Fn`, `Impl`, `Mod`, `Macro`
+Type name is the "context" (e.g. function name, trait being impl'ed, function being tested, etc.)
 
 ```rust
 /* -------------------------------------------------------------------------- */
@@ -54,5 +55,11 @@ mod tests {
 - Lexer/parser use `chumsky` combinators; parser fns return `impl Parser<...>`
 - All AST nodes include `span: Span` for source location
 - Errors use `thiserror`: `#[derive(Error)]`
-- Doc comments: `` `Name` `` or `` [`Name`] `` for links
 - Visibility: `pub(self)` module-private, `pub(super)` test helpers
+- Doc comments: `` `Name` `` or `` [`Name`] `` for links
+- Doc comments (cont.): start doc comments with identifier:
+
+    ```rust
+    /// `ident` ...
+    fn ident() {}
+    ```

@@ -3,6 +3,7 @@ mod cmd;
 mod compile;
 mod core;
 mod generate;
+mod ir;
 mod lex;
 mod parse;
 mod visit;

@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use crate::core::Descriptor;
+use crate::core::DescriptorBuilder;
 use crate::core::PackageName;
 use crate::core::Reference;
 use crate::core::SchemaImport;
+use crate::ir::lower;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Symbols                              */
@@ -111,6 +113,60 @@ impl Symbols {
     }
 }
 
+/* --------------------------- Impl: TypeResolver --------------------------- */
+
+impl lower::TypeResolver for Symbols {
+    fn resolve(
+        &self,
+        scope: &[String],
+        reference: &[String],
+        is_absolute: bool,
+    ) -> Option<(String, lower::TypeKind)> {
+        let (path, name) = if reference.len() == 1 {
+            (vec![], reference[0].clone())
+        } else {
+            let path: Vec<String> = reference[..reference.len() - 1].to_vec();
+            let name = reference.last()?.clone();
+            (path, name)
+        };
+
+        let ref_ = if is_absolute {
+            Reference::try_new_absolute(path, &name).ok()?
+        } else {
+            Reference::try_new_relative(path, &name).ok()?
+        };
+
+        let scope_desc = if scope.is_empty() {
+            DescriptorBuilder::default()
+                .package(PackageName::try_from(vec!["".to_string()]).ok()?)
+                .build()
+                .ok()?
+        } else {
+            let package = PackageName::try_from(vec![scope[0].clone()]).ok()?;
+            let path_components = if scope.len() > 1 {
+                scope[1..].to_vec()
+            } else {
+                vec![]
+            };
+
+            DescriptorBuilder::default()
+                .package(package)
+                .path(path_components)
+                .build()
+                .ok()?
+        };
+
+        let (desc, kind) = self.find(&scope_desc, &ref_)?;
+
+        let ir_kind = match kind {
+            TypeKind::Message => lower::TypeKind::Message,
+            TypeKind::Enum => lower::TypeKind::Enum,
+        };
+
+        Some((desc.to_string(), ir_kind))
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                          Struct: ModuleMetadata                            */
 /* -------------------------------------------------------------------------- */
@@ -143,7 +199,7 @@ pub struct ModuleMetadata {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeKind {
     Message,
-    Variant,
+    Enum,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -195,11 +251,11 @@ mod tests {
 
         // When: Inserting different types.
         symbols.insert_type(message.clone(), TypeKind::Message);
-        symbols.insert_type(variant.clone(), TypeKind::Variant);
+        symbols.insert_type(variant.clone(), TypeKind::Enum);
 
         // Then: Each should have the correct type.
         assert_eq!(symbols.get_type(&message), Some(TypeKind::Message));
-        assert_eq!(symbols.get_type(&variant), Some(TypeKind::Variant));
+        assert_eq!(symbols.get_type(&variant), Some(TypeKind::Enum));
     }
 
     /* --------------------- Tests: Absolute references --------------------- */
