@@ -27,6 +27,9 @@ inputs:
     default: true
 
 outputs:
+  platform:
+    description: "Host platform triple"
+    value: ${{ steps.check-active-toolchain.outputs.platform }}
   cargo_version:
     description: "Current 'cargo' version"
     value: ${{ steps.check-active-toolchain.outputs.cargo_version }}
@@ -98,6 +101,8 @@ runs:
       shell: bash
       run: |
         rustup show
+
+        echo "platform=$(rustc -v --version | grep host | sed 's/.*[ ]//')" >> $GITHUB_OUTPUT
 
         echo "cargo_version=$(cargo --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
         echo "rustc_version=$(rustc --version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
