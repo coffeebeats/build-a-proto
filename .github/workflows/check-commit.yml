@@ -165,6 +165,7 @@ jobs:
       - uses: "./.github/actions/cargo-build"
         with:
           profile: release
+          skip_crate_build_cache: ${{ needs.changes.outputs.has_source_change == 'true' }}
 
       - name: Cache 'cargo-llvm-cov'
         id: cache-cargo-llvm-cov
@@ -173,11 +174,12 @@ jobs:
           key: >-
             cache-cargo-llvm-cov-
             ${{ runner.os }}-
+            ${{ steps.setup-rust.outputs.platform }}-
             ${{ steps.setup-rust.outputs.rustc_version }}
           path: |
             ~/.cargo/bin/cargo-llvm-cov
           restore-keys: |
-            cache-cargo-llvm-cov- ${{ runner.os }}-
+            cache-cargo-llvm-cov- ${{ runner.os }}- ${{ steps.setup-rust.outputs.platform }}-
 
       # See https://github.com/taiki-e/cargo-llvm-cov?tab=readme-ov-file#installation.
       - name: Install 'cargo-llvm-cov'
