@@ -166,10 +166,25 @@ jobs:
         with:
           profile: release
 
+      - name: Cache 'cargo-llvm-cov'
+        id: cache-cargo-llvm-cov
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          key: >-
+            cache-cargo-llvm-cov-
+            ${{ runner.os }}-
+            ${{ steps.setup-rust.outputs.rustc_version }}
+          path: |
+            ~/.cargo/bin/cargo-llvm-cov
+          restore-keys: |
+            cache-cargo-llvm-cov- ${{ runner.os }}-
+
       # See https://github.com/taiki-e/cargo-llvm-cov?tab=readme-ov-file#installation.
       - name: Install 'cargo-llvm-cov'
-        if: needs.changes.outputs.has_source_change == 'true'
-        run: cargo install cargo-llvm-cov --locked
+        if: |
+          needs.changes.outputs.has_source_change == 'true' &&
+          steps.cache-cargo-llvm-cov.outputs.cache-hit != 'true'
+        run: cargo +stable install cargo-llvm-cov --locked
 
       - name: Test source code (with coverage)
         if: needs.changes.outputs.has_source_change == 'true'
