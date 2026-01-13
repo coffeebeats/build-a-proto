@@ -188,6 +188,25 @@ jobs:
           steps.cache-cargo-llvm-cov.outputs.cache-hit != 'true'
         run: cargo +stable install cargo-llvm-cov --locked
 
+      - name: Cache 'cargo' build artifacts
+        id: cache-cargo-build-cov
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        if: needs.changes.outputs.has_source_change == 'true'
+        with:
+          key: >-
+            cache-cargo-build-cov-
+            ${{ runner.os }}-
+            ${{ steps.setup-rust.outputs.platform }}-
+            ${{ steps.setup-rust.outputs.rustc_version }}-
+            ${{ hashFiles('.cargo/config.toml', 'Cargo.toml', 'Cargo.lock', 'src/**/*.rs') }}
+          path: |
+            ./.cargo/config.toml
+            ./target/
+            ./vendor/
+          restore-keys: |
+            cache-cargo-build-cov- ${{ runner.os }}- ${{ steps.setup-rust.outputs.platform }}- ${{ steps.setup-rust.outputs.rustc_version }}-
+            cache-cargo-build-cov- ${{ runner.os }}- ${{ steps.setup-rust.outputs.platform }}-
+
       - name: Test source code (with coverage)
         if: needs.changes.outputs.has_source_change == 'true'
         run: |
