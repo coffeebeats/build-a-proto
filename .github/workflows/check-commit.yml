@@ -163,9 +163,9 @@ jobs:
           profile: minimal
 
       - uses: "./.github/actions/cargo-build"
+        if: ${{ needs.changes.outputs.has_source_change != 'true' }}
         with:
           profile: release
-          skip_crate_build_cache: ${{ needs.changes.outputs.has_source_change == 'true' }}
 
       - name: Cache 'cargo-llvm-cov'
         id: cache-cargo-llvm-cov
