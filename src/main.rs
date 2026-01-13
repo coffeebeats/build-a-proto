@@ -8,9 +8,6 @@ mod lex;
 mod parse;
 mod visit;
 
-// TODO: Remove this; fake edit to trigger CI tests.
-// TODO: Remove this; fake edit to trigger CI tests.
-
 use anyhow::Result;
 use clap::Parser;
 use cmd::Commands;
