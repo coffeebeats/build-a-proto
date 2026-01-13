@@ -12,9 +12,6 @@ use anyhow::Result;
 use clap::Parser;
 use cmd::Commands;
 
-// TODO: Remove this; fake edit to trigger CI builds.
-// TODO: Remove this; fake edit to trigger CI builds.
-
 #[derive(Parser)]
 #[command(name = "baproto", author, version, about)]
 #[command(arg_required_else_help = true)]
