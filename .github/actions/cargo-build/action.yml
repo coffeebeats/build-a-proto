@@ -89,7 +89,8 @@ runs:
       if: inputs.skip_cargo_registry_cache != 'true'
       with:
         key: >-
-          cache-cargo-registry-${{ runner.os }}-
+          cache-cargo-registry-
+          ${{ runner.os }}-
           ${{ steps.rs-props.outputs.platform }}-
           ${{ steps.rs-props.outputs.rustc }}-
           ${{ hashFiles(
@@ -109,7 +110,8 @@ runs:
       if: inputs.skip_crate_build_cache != 'true'
       with:
         key: >-
-          cache-cargo-build-${{ runner.os }}-
+          cache-cargo-build-
+          ${{ runner.os }}-
           ${{ steps.rs-props.outputs.platform }}-
           ${{ steps.rs-props.outputs.rustc }}-
           ${{ hashFiles(
