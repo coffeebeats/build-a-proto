@@ -25,8 +25,16 @@ inputs:
     description: "Whether to use 'cross' for compilation."
     required: false
     default: false
-  skip_cache:
-    description: "Whether to skip caching of artifacts."
+  skip_cargo_crates_cache:
+    description: "Whether to skip caching of globally installed cargo commands."
+    required: false
+    default: false
+  skip_cargo_registry_cache:
+    description: "Whether to skip caching the Cargo registry."
+    required: false
+    default: false
+  skip_crate_build_cache:
+    description: "Whether to skip caching crate build artifacts."
     required: false
     default: false
   extra_args:
@@ -58,7 +66,7 @@ runs:
     - name: Cache 'cargo' crates
       id: cache-cargo-crates
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
-      if: inputs.skip_cache != 'true'
+      if: inputs.skip_cargo_crates_cache != 'true'
       with:
         key: >-
           cache-cargo-crates-
@@ -78,10 +86,11 @@ runs:
     - name: Cache 'cargo' registry
       id: cache-cargo-registry
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
-      if: inputs.skip_cache != 'true'
+      if: inputs.skip_cargo_registry_cache != 'true'
       with:
         key: >-
-          cache-cargo-registry-${{ runner.os }}-
+          cache-cargo-registry-
+          ${{ runner.os }}-
           ${{ steps.rs-props.outputs.platform }}-
           ${{ steps.rs-props.outputs.rustc }}-
           ${{ hashFiles(
@@ -98,10 +107,11 @@ runs:
     - name: Cache 'cargo' build artifacts
       id: cache-cargo-build
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
-      if: inputs.skip_cache != 'true'
+      if: inputs.skip_crate_build_cache != 'true'
       with:
         key: >-
-          cache-cargo-build-${{ runner.os }}-
+          cache-cargo-build-
+          ${{ runner.os }}-
           ${{ steps.rs-props.outputs.platform }}-
           ${{ steps.rs-props.outputs.rustc }}-
           ${{ hashFiles(

@@ -162,22 +162,39 @@ jobs:
           version-file: Cargo.toml
           profile: minimal
 
+      # No source code changes
+
       - uses: "./.github/actions/cargo-build"
+        if: ${{ needs.changes.outputs.has_source_change != 'true' }}
         with:
           profile: release
+
+      - name: Test source code
+        if: needs.changes.outputs.has_source_change != 'true'
+        run: |
+          cargo test \
+            --frozen \
+            --release \
+            --target=x86_64-unknown-linux-gnu \
+            --all-features \
+            --all-targets
+
+      # With source code changes
 
       - name: Cache 'cargo-llvm-cov'
         id: cache-cargo-llvm-cov
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        if: needs.changes.outputs.has_source_change == 'true'
         with:
           key: >-
             cache-cargo-llvm-cov-
             ${{ runner.os }}-
+            ${{ steps.setup-rust.outputs.platform }}-
             ${{ steps.setup-rust.outputs.rustc_version }}
           path: |
             ~/.cargo/bin/cargo-llvm-cov
           restore-keys: |
-            cache-cargo-llvm-cov- ${{ runner.os }}-
+            cache-cargo-llvm-cov- ${{ runner.os }}- ${{ steps.setup-rust.outputs.platform }}-
 
       # See https://github.com/taiki-e/cargo-llvm-cov?tab=readme-ov-file#installation.
       - name: Install 'cargo-llvm-cov'
@@ -185,6 +202,25 @@ jobs:
           needs.changes.outputs.has_source_change == 'true' &&
           steps.cache-cargo-llvm-cov.outputs.cache-hit != 'true'
         run: cargo +stable install cargo-llvm-cov --locked
+
+      - name: Cache 'cargo' build artifacts
+        id: cache-cargo-build-cov
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        if: needs.changes.outputs.has_source_change == 'true'
+        with:
+          key: >-
+            cache-cargo-build-cov-
+            ${{ runner.os }}-
+            ${{ steps.setup-rust.outputs.platform }}-
+            ${{ steps.setup-rust.outputs.rustc_version }}-
+            ${{ hashFiles('.cargo/config.toml', 'Cargo.toml', 'Cargo.lock', 'src/**/*.rs') }}
+          path: |
+            ./.cargo/config.toml
+            ./target/
+            ./vendor/
+          restore-keys: |
+            cache-cargo-build-cov- ${{ runner.os }}- ${{ steps.setup-rust.outputs.platform }}- ${{ steps.setup-rust.outputs.rustc_version }}-
+            cache-cargo-build-cov- ${{ runner.os }}- ${{ steps.setup-rust.outputs.platform }}-
 
       - name: Test source code (with coverage)
         if: needs.changes.outputs.has_source_change == 'true'
@@ -198,16 +234,6 @@ jobs:
             --remap-path-prefix \
             --codecov \
             --output-path codecov.json
-
-      - name: Test source code
-        if: needs.changes.outputs.has_source_change != 'true'
-        run: |
-          cargo test \
-            --frozen \
-            --release \
-            --target=x86_64-unknown-linux-gnu \
-            --all-features \
-            --all-targets
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
