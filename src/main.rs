@@ -1,3 +1,4 @@
+mod analyze;
 mod ast;
 mod cmd;
 mod compile;
@@ -10,6 +11,7 @@ mod visit;
 
 use anyhow::Result;
 use clap::Parser;
+
 use cmd::Commands;
 
 #[derive(Parser)]
