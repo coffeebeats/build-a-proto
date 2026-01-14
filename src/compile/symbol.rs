@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
+use crate::ast;
 use crate::core::Descriptor;
-use crate::core::DescriptorBuilder;
 use crate::core::PackageName;
-use crate::core::Reference;
 use crate::core::SchemaImport;
 use crate::ir::lower;
 
@@ -55,61 +54,10 @@ impl Symbols {
     #[allow(dead_code)]
     pub fn find(
         &self,
-        scope: &Descriptor,
-        reference: &Reference,
+        _scope: &Descriptor,
+        _reference: &ast::Reference,
     ) -> Option<(Descriptor, TypeKind)> {
-        if reference.is_absolute() {
-            return self.resolve_absolute(reference);
-        }
-
-        self.resolve_relative(scope, reference)
-    }
-
-    /// `resolve_absolute` resolves an absolute reference (a reference beginning
-    /// with a `.`).
-    fn resolve_absolute(&self, reference: &Reference) -> Option<(Descriptor, TypeKind)> {
-        let key = reference.to_string().strip_prefix('.').unwrap().to_string();
-
-        let descriptor = self.descriptors.get(&key)?;
-        let kind = self.types.get(descriptor)?;
-        Some((descriptor.clone(), *kind))
-    }
-
-    /// `resolve_relative` resolves a relative reference by searching outward
-    /// from the provided scope.
-    fn resolve_relative(
-        &self,
-        scope: &Descriptor,
-        reference: &Reference,
-    ) -> Option<(Descriptor, TypeKind)> {
-        let scope_name = scope.to_string();
-        debug_assert!(!scope_name.is_empty());
-
-        let mut parts: Vec<&str> = scope_name.split('.').filter(|s| !s.is_empty()).collect();
-
-        // Try each scope level, from innermost to outermost
-        loop {
-            let candidate_name = if parts.is_empty() {
-                reference.to_string()
-            } else {
-                format!("{}.{}", parts.join("."), reference)
-            };
-
-            if let Some(desc) = self.descriptors.get(&candidate_name) {
-                let kind = self.types.get(desc);
-                debug_assert!(kind.is_some());
-
-                return kind.map(|k| (desc.clone(), *k));
-            }
-
-            if parts.is_empty() {
-                break;
-            }
-
-            parts.pop();
-        }
-
-        None
+        todo!()
     }
 }
 
@@ -118,52 +66,11 @@ impl Symbols {
 impl lower::TypeResolver for Symbols {
     fn resolve(
         &self,
-        scope: &[String],
-        reference: &[String],
-        is_absolute: bool,
+        _scope: &[String],
+        _reference: &[String],
+        _is_absolute: bool,
     ) -> Option<(String, lower::TypeKind)> {
-        let (path, name) = if reference.len() == 1 {
-            (vec![], reference[0].clone())
-        } else {
-            let path: Vec<String> = reference[..reference.len() - 1].to_vec();
-            let name = reference.last()?.clone();
-            (path, name)
-        };
-
-        let ref_ = if is_absolute {
-            Reference::try_new_absolute(path, &name).ok()?
-        } else {
-            Reference::try_new_relative(path, &name).ok()?
-        };
-
-        let scope_desc = if scope.is_empty() {
-            DescriptorBuilder::default()
-                .package(PackageName::try_from(vec!["".to_string()]).ok()?)
-                .build()
-                .ok()?
-        } else {
-            let package = PackageName::try_from(vec![scope[0].clone()]).ok()?;
-            let path_components = if scope.len() > 1 {
-                scope[1..].to_vec()
-            } else {
-                vec![]
-            };
-
-            DescriptorBuilder::default()
-                .package(package)
-                .path(path_components)
-                .build()
-                .ok()?
-        };
-
-        let (desc, kind) = self.find(&scope_desc, &ref_)?;
-
-        let ir_kind = match kind {
-            TypeKind::Message => lower::TypeKind::Message,
-            TypeKind::Enum => lower::TypeKind::Enum,
-        };
-
-        Some((desc.to_string(), ir_kind))
+        todo!()
     }
 }
 
@@ -465,13 +372,32 @@ mod tests {
 
     /* ---------------------------- Fn: type_ref ---------------------------- */
 
-    fn type_ref(path: &[&str], name: &str) -> Reference {
-        Reference::try_new_relative(path.iter().map(|&s| s.to_owned()).collect(), name).unwrap()
+    fn type_ref(path: &[&str], name: &str) -> ast::Reference {
+        let mut reference = type_ref_abs(path, name);
+        reference.is_absolute = false;
+        reference
     }
 
     /* -------------------------- Fn: type_ref_abs -------------------------- */
 
-    fn type_ref_abs(path: &[&str], name: &str) -> Reference {
-        Reference::try_new_absolute(path.iter().map(|&s| s.to_owned()).collect(), name).unwrap()
+    fn type_ref_abs(path: &[&str], name: &str) -> ast::Reference {
+        use crate::lex;
+        use chumsky::span::Span;
+
+        ast::Reference {
+            components: path
+                .iter()
+                .map(|&s| ast::Ident {
+                    name: s.to_owned(),
+                    span: lex::Span::new(SchemaImport::anonymous(), 0..0),
+                })
+                .chain(std::iter::once(ast::Ident {
+                    name: name.to_owned(),
+                    span: lex::Span::new(SchemaImport::anonymous(), 0..0),
+                }))
+                .collect::<Vec<_>>(),
+            is_absolute: false,
+            span: lex::Span::new(SchemaImport::anonymous(), 0..0),
+        }
     }
 }
