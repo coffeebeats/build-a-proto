@@ -1,10 +1,5 @@
 use crate::visit::Visitor;
 
-/* ----------------------------- Mod: Analyzers ----------------------------- */
-
-mod analyzers;
-pub use analyzers::*;
-
 /* ----------------------------- Mod: Diagnostic ---------------------------- */
 
 mod diagnostic;
