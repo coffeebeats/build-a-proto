@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::core::SchemaImport;
 use crate::generate::Writer;
 
 /* -------------------------------------------------------------------------- */
@@ -13,7 +14,7 @@ pub struct StringWriter(String);
 /* ------------------------------ Impl: Writer ------------------------------ */
 
 impl Writer for StringWriter {
-    fn configured(self, _: &crate::core::Module) -> anyhow::Result<Self> {
+    fn configured(self, _: &SchemaImport) -> anyhow::Result<Self> {
         Ok(self)
     }
 

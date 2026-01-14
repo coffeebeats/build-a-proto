@@ -11,14 +11,14 @@ pub use file::*;
 #[allow(unused_imports)]
 pub use string::*;
 
-use crate::core::Module;
+use crate::core::SchemaImport;
 
 /* -------------------------------------------------------------------------- */
 /*                                Trait: Writer                               */
 /* -------------------------------------------------------------------------- */
 
 pub trait Writer: Default {
-    fn configured(self, module: &Module) -> anyhow::Result<Self>;
+    fn configured(self, import: &SchemaImport) -> anyhow::Result<Self>;
     fn close(&mut self) -> anyhow::Result<()>;
     fn open(&mut self, path: &std::path::Path) -> anyhow::Result<()>;
     fn write(&mut self, input: &str) -> anyhow::Result<()>;
