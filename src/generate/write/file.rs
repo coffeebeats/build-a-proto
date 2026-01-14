@@ -3,6 +3,7 @@ use derive_builder::Builder;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::core::SchemaImport;
 use crate::generate::Writer;
 
 /* -------------------------------------------------------------------------- */
@@ -19,8 +20,8 @@ pub struct FileWriter {
 /* ------------------------------ Impl: Writer ------------------------------ */
 
 impl Writer for FileWriter {
-    fn configured(mut self, module: &crate::core::Module) -> anyhow::Result<Self> {
-        self.path = module.path.to_path_buf();
+    fn configured(mut self, import: &SchemaImport) -> anyhow::Result<Self> {
+        self.path = import.as_path().to_owned();
         Ok(self)
     }
 
