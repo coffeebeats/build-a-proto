@@ -3,16 +3,6 @@
 mod descriptor;
 pub use descriptor::*;
 
-/* ---------------------------- Mod: Enumeration ---------------------------- */
-
-mod enumeration;
-pub use enumeration::*;
-
-/* ------------------------------ Mod: Message ------------------------------ */
-
-mod message;
-pub use message::*;
-
 /* ------------------------------ Mod: Package ------------------------------ */
 
 mod package;
@@ -23,20 +13,10 @@ pub use package::*;
 mod import;
 pub use import::*;
 
-/* ----------------------------- Mod: Reference ----------------------------- */
-
-mod reference;
-pub use reference::*;
-
 /* ------------------------------ Mod: Registry ----------------------------- */
 
 mod registry;
 pub use registry::*;
-
-/* ------------------------------- Mod: Types ------------------------------- */
-
-mod types;
-pub use types::*;
 
 /* -------------------------------------------------------------------------- */
 /*                               Struct: Module                               */
