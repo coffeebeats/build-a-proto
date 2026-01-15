@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::core::Descriptor;
+
 /* -------------------------------------------------------------------------- */
 /*                              Struct: Encoding                              */
 /* -------------------------------------------------------------------------- */
@@ -62,11 +64,11 @@ pub enum NativeType {
     },
     /// Reference to message by descriptor string.
     Message {
-        descriptor: String,
+        descriptor: Descriptor,
     },
     /// Reference to enum by descriptor string.
     Enum {
-        descriptor: String,
+        descriptor: Descriptor,
     },
 }
 

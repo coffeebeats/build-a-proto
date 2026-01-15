@@ -1,3 +1,5 @@
+use super::TypeKind;
+
 use crate::ast;
 use crate::ir::Field;
 
@@ -9,7 +11,7 @@ use super::{Lower, LowerContext, TypeResolver};
 
 /* --------------------------- Struct: ast::Field --------------------------- */
 
-impl<'a, R: TypeResolver> Lower<'a, Field, LowerContext<'a, R>> for ast::Field {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Field, LowerContext<'a, R>> for ast::Field {
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Field> {
         let index = self.index.as_ref()?.value.value as u32;
 
@@ -35,7 +37,7 @@ impl<'a, R: TypeResolver> Lower<'a, Field, LowerContext<'a, R>> for ast::Field {
 
 /// `FieldTypeContext` provides context for lowering field types, including
 /// optional encoding annotations.
-pub struct FieldTypeContext<'a, 'b, R: TypeResolver> {
+pub struct FieldTypeContext<'a, 'b, R: TypeResolver<TypeKind>> {
     pub ctx: &'a LowerContext<'b, R>,
     pub encoding: Option<&'a ast::Encoding>,
 }

@@ -1,3 +1,5 @@
+use super::TypeKind;
+
 use crate::ast;
 use crate::ir::{Encoding, Enum, NativeType, Variant, WireFormat};
 
@@ -9,12 +11,10 @@ use super::{Lower, LowerContext, TypeResolver};
 
 /* ---------------------------- Struct: ast::Enum --------------------------- */
 
-impl<'a, R: TypeResolver> Lower<'a, Enum, LowerContext<'a, R>> for ast::Enum {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Enum, LowerContext<'a, R>> for ast::Enum {
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Enum> {
-        let name = self.name.name.clone();
-        let descriptor = ctx.build_child_descriptor(&name);
-
-        let child_ctx = ctx.with_child(name.clone());
+        let name = self.name.name.to_string();
+        let child_ctx = ctx.with(&name);
 
         let mut variants = Vec::new();
         for item in &self.items {
@@ -59,18 +59,17 @@ impl<'a, R: TypeResolver> Lower<'a, Enum, LowerContext<'a, R>> for ast::Enum {
         let doc = self.comment.as_ref().and_then(|c| c.lower(ctx));
 
         Some(Enum {
-            descriptor,
-            name,
+            descriptor: child_ctx.scope,
             discriminant,
-            variants,
             doc,
+            variants,
         })
     }
 }
 
 /* ------------------------ Struct: ast::UnitVariant ------------------------ */
 
-impl<'a, R: TypeResolver> Lower<'a, Variant, LowerContext<'a, R>> for ast::UnitVariant {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Variant, LowerContext<'a, R>> for ast::UnitVariant {
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Variant> {
         let index = self.index.as_ref()?.value.value as u32;
         let doc = self.comment.as_ref().and_then(|c| c.lower(ctx));
@@ -85,7 +84,7 @@ impl<'a, R: TypeResolver> Lower<'a, Variant, LowerContext<'a, R>> for ast::UnitV
 
 /* ------------------------ Struct: ast::FieldVariant ----------------------- */
 
-impl<'a, R: TypeResolver> Lower<'a, Variant, FieldVariantContext<'a, R>> for ast::Field {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Variant, FieldVariantContext<'a, R>> for ast::Field {
     fn lower(&'a self, ctx: &'a FieldVariantContext<'a, R>) -> Option<Variant> {
         use crate::ir::Field;
 
@@ -108,7 +107,7 @@ impl<'a, R: TypeResolver> Lower<'a, Variant, FieldVariantContext<'a, R>> for ast
 
 /// `FieldVariantContext` is a marker context to indicate we're lowering a field
 /// as an enum variant.
-pub struct FieldVariantContext<'a, R: TypeResolver>(pub &'a LowerContext<'a, R>);
+pub struct FieldVariantContext<'a, R: TypeResolver<TypeKind>>(pub &'a LowerContext<'a, R>);
 
 /* -------------------------------------------------------------------------- */
 /*                                 Mod: tests                                 */
@@ -361,9 +360,9 @@ mod tests {
 
         // Then: Should generate proper descriptor.
         assert!(result.is_some());
-        let ir_enum = result.unwrap();
-        assert_eq!(ir_enum.name, "MyEnum");
-        assert!(ir_enum.descriptor.contains("MyEnum"));
+        let enm = result.unwrap();
+        assert_eq!(enm.name(), Some("MyEnum"));
+        assert!(enm.descriptor.to_string().contains("MyEnum"));
     }
 
     #[test]

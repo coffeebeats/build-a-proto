@@ -11,12 +11,48 @@ use super::PackageName;
 /* -------------------------------------------------------------------------- */
 
 #[derive(Builder, Clone, Debug, Deserialize, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct Descriptor {
     pub package: PackageName,
     #[builder(default)]
     pub path: Vec<String>,
-    #[builder(default, setter(into, strip_option))]
-    pub name: Option<String>,
+}
+
+/* ---------------------------- Impl: Descriptor ---------------------------- */
+
+impl Descriptor {
+    /// `name` returns the last component of the path (the "name" of this type).
+    /// Returns `None` if the path is empty (descriptor represents a package
+    /// only).
+    pub fn name(&self) -> Option<&str> {
+        self.path.last().map(|s| s.as_str())
+    }
+
+    /// `parts` returns all components of the [`Descriptor`] as a vector of
+    /// `String`s: package components + path components.
+    pub fn parts(&self) -> Vec<String> {
+        let mut result = Vec::new();
+
+        result.extend(self.package.iter().cloned());
+        result.extend(self.path.iter().cloned());
+
+        result
+    }
+
+    /// `pop` removes the last item from the [`Descriptor`]'s `path`. This has
+    /// no effect if `path` is already empty.
+    pub fn pop(&mut self) -> Option<String> {
+        self.path.pop()
+    }
+
+    /// `push` appends the provided component to `path`.
+    ///
+    pub fn push<T>(&mut self, component: T)
+    where
+        T: AsRef<str>,
+    {
+        self.path.push(component.as_ref().to_string());
+    }
 }
 
 /* ------------------------------ Impl: Display ----------------------------- */
@@ -27,10 +63,6 @@ impl fmt::Display for Descriptor {
 
         if !self.path.is_empty() {
             write!(f, ".{}", self.path.join("."))?;
-        }
-
-        if let Some(name) = &self.name {
-            write!(f, ".{}", name)?;
         }
 
         Ok(())
@@ -97,7 +129,7 @@ mod tests {
         // Given: A descriptor with a package and name.
         let desc = DescriptorBuilder::default()
             .package(PackageName::try_from(vec!["com", "example"]).unwrap())
-            .name("Field".to_string())
+            .path(vec!["Field".to_string()])
             .build()
             .unwrap();
 
@@ -113,8 +145,7 @@ mod tests {
         // Given: A descriptor with package, path, and name.
         let desc = DescriptorBuilder::default()
             .package(PackageName::try_from(vec!["com", "example"]).unwrap())
-            .path(vec!["Message".to_string()])
-            .name("field".to_string())
+            .path(vec!["Message".to_string(), "field".to_string()])
             .build()
             .unwrap();
 
@@ -134,8 +165,8 @@ mod tests {
                 "Outer".to_string(),
                 "Middle".to_string(),
                 "Inner".to_string(),
+                "nested_field".to_string(),
             ])
-            .name("nested_field".to_string())
             .build()
             .unwrap();
 
@@ -151,8 +182,7 @@ mod tests {
         // Given: A descriptor with an empty path.
         let desc = DescriptorBuilder::default()
             .package(PackageName::try_from(vec!["com", "example"]).unwrap())
-            .path(vec![])
-            .name("Field".to_string())
+            .path(vec!["Field".to_string()])
             .build()
             .unwrap();
 

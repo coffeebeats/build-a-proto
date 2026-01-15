@@ -1,3 +1,5 @@
+use super::TypeKind;
+
 use crate::ast;
 use crate::ir::{Encoding, NativeType, WireFormat};
 
@@ -9,7 +11,9 @@ use super::{Lower, TypeResolver, field::FieldTypeContext};
 
 /* ---------------------------- Struct: ast::Type --------------------------- */
 
-impl<'a, 'b, R: TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Type {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Type
+{
     fn lower(&'a self, ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         match self {
             ast::Type::Scalar(scalar) => scalar.lower(ctx),
@@ -22,7 +26,9 @@ impl<'a, 'b, R: TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> f
 
 /* --------------------------- Struct: ast::Scalar -------------------------- */
 
-impl<'a, 'b, R: TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Scalar {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Scalar
+{
     fn lower(&'a self, field_ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         use ast::ScalarType::*;
 
@@ -117,27 +123,21 @@ impl<'a, 'b, R: TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> f
 
 /* ------------------------- Struct: ast::Reference ------------------------- */
 
-impl<'a, 'b, R: super::TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+impl<'a, 'b, R: super::TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
     for ast::Reference
 {
     fn lower(&'a self, field_ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
-        // Build reference components as strings
-        let reference: Vec<String> = self.components.iter().map(|c| c.name.clone()).collect();
-
         // Get current scope
-        let scope = field_ctx.ctx.scope();
+        let scope = &field_ctx.ctx.scope;
 
         // Use TypeResolver to resolve the reference
-        let (descriptor, kind) =
-            field_ctx
-                .ctx
-                .resolver
-                .resolve(&scope, &reference, self.is_absolute)?;
+        let (descriptor, kind) = field_ctx.ctx.resolver.resolve(&scope, self)?;
 
         // Map kind to NativeType
         let native = match kind {
             super::TypeKind::Message => NativeType::Message { descriptor },
             super::TypeKind::Enum => NativeType::Enum { descriptor },
+            super::TypeKind::Package => return None, // Not a valid reference.
         };
 
         Some(Encoding {
@@ -151,7 +151,9 @@ impl<'a, 'b, R: super::TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b
 
 /* --------------------------- Struct: ast::Array --------------------------- */
 
-impl<'a, 'b, R: TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Array {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Array
+{
     fn lower(&'a self, field_ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         // Lower element type (without encoding annotations)
         let element_ctx = FieldTypeContext {
@@ -180,7 +182,9 @@ impl<'a, 'b, R: TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> f
 
 /* ---------------------------- Struct: ast::Map ---------------------------- */
 
-impl<'a, 'b, R: TypeResolver> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Map {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Map
+{
     fn lower(&'a self, field_ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         // Lower key and value types (without encoding annotations)
         let element_ctx = FieldTypeContext {
@@ -437,17 +441,20 @@ mod tests {
         };
 
         // When: Lowering with resolver that returns a message type.
-        let resolver = Box::leak(Box::new(MockResolver {
-            result: Some(("foo.Bar".to_string(), TypeKind::Message)),
-        }));
-        let desc = DescriptorBuilder::default()
-            .package(PackageName::try_from(vec!["test".to_string()]).unwrap())
+        let pkg = PackageName::try_from(vec!["foo"]).unwrap();
+        let descriptor = DescriptorBuilder::default()
+            .package(pkg)
+            .path(vec!["Bar".to_string()])
             .build()
             .unwrap();
-        let lower_ctx = LowerContext {
-            resolver,
-            parent: desc,
-        };
+        let resolver = Box::leak(Box::new(MockResolver {
+            result: Some((descriptor.clone(), TypeKind::Message)),
+        }));
+        let scope = DescriptorBuilder::default()
+            .package(PackageName::try_from(vec!["test"]).unwrap())
+            .build()
+            .unwrap();
+        let lower_ctx = LowerContext { resolver, scope };
         let ctx = FieldTypeContext {
             ctx: &lower_ctx,
             encoding: None,
@@ -462,8 +469,8 @@ mod tests {
             encoding.native,
             NativeType::Message { descriptor: _ }
         ));
-        if let NativeType::Message { descriptor } = encoding.native {
-            assert_eq!(descriptor, "foo.Bar");
+        if let NativeType::Message { descriptor: got } = encoding.native {
+            assert_eq!(descriptor, got);
         }
     }
 
@@ -473,24 +480,27 @@ mod tests {
         let reference = ast::Reference {
             is_absolute: false,
             components: vec![ast::Ident {
-                name: "Status".to_string(),
+                name: "Bar".to_string(),
                 span: Span::default(),
             }],
             span: Span::default(),
         };
 
         // When: Lowering with resolver that returns an enum type.
+        let pkg = PackageName::try_from(vec!["foo"]).unwrap();
+        let descriptor = DescriptorBuilder::default()
+            .package(pkg)
+            .path(vec!["Bar".to_string()])
+            .build()
+            .unwrap();
         let resolver = Box::leak(Box::new(MockResolver {
-            result: Some(("mypackage.Status".to_string(), TypeKind::Enum)),
+            result: Some((descriptor.clone(), TypeKind::Enum)),
         }));
-        let desc = DescriptorBuilder::default()
+        let scope = DescriptorBuilder::default()
             .package(PackageName::try_from(vec!["test".to_string()]).unwrap())
             .build()
             .unwrap();
-        let lower_ctx = LowerContext {
-            resolver,
-            parent: desc,
-        };
+        let lower_ctx = LowerContext { resolver, scope };
         let ctx = FieldTypeContext {
             ctx: &lower_ctx,
             encoding: None,
@@ -505,8 +515,8 @@ mod tests {
             encoding.native,
             NativeType::Enum { descriptor: _ }
         ));
-        if let NativeType::Enum { descriptor } = encoding.native {
-            assert_eq!(descriptor, "mypackage.Status");
+        if let NativeType::Enum { descriptor: got } = encoding.native {
+            assert_eq!(descriptor, got);
         }
     }
 
@@ -524,14 +534,11 @@ mod tests {
 
         // When: Lowering with resolver that returns None.
         let resolver = Box::leak(Box::new(MockResolver { result: None }));
-        let desc = DescriptorBuilder::default()
+        let scope = DescriptorBuilder::default()
             .package(PackageName::try_from(vec!["test".to_string()]).unwrap())
             .build()
             .unwrap();
-        let lower_ctx = LowerContext {
-            resolver,
-            parent: desc,
-        };
+        let lower_ctx = LowerContext { resolver, scope };
         let ctx = FieldTypeContext {
             ctx: &lower_ctx,
             encoding: None,

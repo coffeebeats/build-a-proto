@@ -1,3 +1,5 @@
+use super::TypeKind;
+
 use crate::ast;
 use crate::ir::Message;
 
@@ -7,12 +9,10 @@ use super::{Lower, LowerContext, TypeResolver};
 /*                                 Impl: Lower                                */
 /* -------------------------------------------------------------------------- */
 
-impl<'a, R: TypeResolver> Lower<'a, Message, LowerContext<'a, R>> for ast::Message {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Message, LowerContext<'a, R>> for ast::Message {
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Message> {
         let name = self.name.name.clone();
-        let descriptor = ctx.build_child_descriptor(&name);
-
-        let child_ctx = ctx.with_child(name.clone());
+        let child_ctx = ctx.with(name.clone());
 
         let mut fields = Vec::new();
         let mut messages = Vec::new();
@@ -42,8 +42,7 @@ impl<'a, R: TypeResolver> Lower<'a, Message, LowerContext<'a, R>> for ast::Messa
         let doc = self.comment.as_ref().and_then(|c| c.lower(ctx));
 
         Some(Message {
-            descriptor,
-            name,
+            descriptor: child_ctx.scope,
             fields,
             messages,
             enums,
@@ -87,8 +86,7 @@ mod tests {
         // Then: Should produce empty message with proper descriptor.
         assert!(result.is_some());
         let ir_message = result.unwrap();
-        assert_eq!(ir_message.name, "Empty");
-        assert!(ir_message.descriptor.contains("Empty"));
+        assert!(ir_message.descriptor.to_string().contains("Empty"));
         assert!(ir_message.fields.is_empty());
         assert!(ir_message.messages.is_empty());
         assert!(ir_message.enums.is_empty());
@@ -224,8 +222,7 @@ mod tests {
         assert!(result.is_some());
         let ir_message = result.unwrap();
         assert_eq!(ir_message.messages.len(), 1);
-        assert_eq!(ir_message.messages[0].name, "Inner");
-        assert!(ir_message.messages[0].descriptor.contains("Inner"));
+        assert_eq!(ir_message.messages[0].name(), Some("Inner"));
     }
 
     #[test]
@@ -270,9 +267,9 @@ mod tests {
 
         // Then: Should include nested enum.
         assert!(result.is_some());
-        let ir_message = result.unwrap();
-        assert_eq!(ir_message.enums.len(), 1);
-        assert_eq!(ir_message.enums[0].name, "Mode");
+        let msg = result.unwrap();
+        assert_eq!(msg.enums.len(), 1);
+        assert_eq!(msg.enums[0].name(), Some("Mode"));
     }
 
     #[test]
