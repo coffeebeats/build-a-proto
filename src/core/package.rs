@@ -49,6 +49,15 @@ pub enum PackageNameError {
 #[display("{}", self.0.join("."))]
 pub struct PackageName(Vec<String>);
 
+/* ---------------------------- Impl: PackageName --------------------------- */
+
+impl PackageName {
+    /// `suffix` returns the final segment of the package name.
+    pub fn suffix(&self) -> &str {
+        self.0.last().expect("missing package name")
+    }
+}
+
 /* ------------------------------- Impl: Deref ------------------------------ */
 
 impl std::ops::Deref for PackageName {
