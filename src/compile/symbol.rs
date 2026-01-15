@@ -112,11 +112,7 @@ impl<T: Clone> Symbols<T> {
 /* --------------------------- Impl: TypeResolver --------------------------- */
 
 impl<T: Clone> TypeResolver<T> for Symbols<T> {
-    fn resolve(
-        &self,
-        scope: &Descriptor,
-        reference: &ast::Reference,
-    ) -> Option<(Descriptor, T)> {
+    fn resolve(&self, scope: &Descriptor, reference: &ast::Reference) -> Option<(Descriptor, T)> {
         self.resolve(scope, reference)
     }
 }

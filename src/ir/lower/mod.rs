@@ -72,11 +72,7 @@ pub trait TypeResolver<T> {
     ///
     /// - `scope`: The current scope (package + parent type path)
     /// - `reference`: The reference components as strings
-    fn resolve(
-        &self,
-        scope: &Descriptor,
-        reference: &ast::Reference,
-    ) -> Option<(Descriptor, T)>;
+    fn resolve(&self, scope: &Descriptor, reference: &ast::Reference) -> Option<(Descriptor, T)>;
 }
 
 /* ----------------------------- Enum: TypeKind ----------------------------- */

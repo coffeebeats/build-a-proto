@@ -11,7 +11,9 @@ use super::{Lower, TypeResolver, field::FieldTypeContext};
 
 /* ---------------------------- Struct: ast::Type --------------------------- */
 
-impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Type {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Type
+{
     fn lower(&'a self, ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         match self {
             ast::Type::Scalar(scalar) => scalar.lower(ctx),
@@ -24,7 +26,9 @@ impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a,
 
 /* --------------------------- Struct: ast::Scalar -------------------------- */
 
-impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Scalar {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Scalar
+{
     fn lower(&'a self, field_ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         use ast::ScalarType::*;
 
@@ -147,7 +151,9 @@ impl<'a, 'b, R: super::TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeCont
 
 /* --------------------------- Struct: ast::Array --------------------------- */
 
-impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Array {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Array
+{
     fn lower(&'a self, field_ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         // Lower element type (without encoding annotations)
         let element_ctx = FieldTypeContext {
@@ -176,7 +182,9 @@ impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a,
 
 /* ---------------------------- Struct: ast::Map ---------------------------- */
 
-impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>> for ast::Map {
+impl<'a, 'b, R: TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeContext<'a, 'b, R>>
+    for ast::Map
+{
     fn lower(&'a self, field_ctx: &'a FieldTypeContext<'a, 'b, R>) -> Option<Encoding> {
         // Lower key and value types (without encoding annotations)
         let element_ctx = FieldTypeContext {
