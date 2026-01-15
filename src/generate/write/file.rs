@@ -1,40 +1,49 @@
 use anyhow::anyhow;
-use derive_builder::Builder;
+use std::io::Write;
 use std::path::Path;
-use std::path::PathBuf;
 
-use crate::core::SchemaImport;
 use crate::generate::Writer;
 
 /* -------------------------------------------------------------------------- */
 /*                             Struct: FileWriter                             */
 /* -------------------------------------------------------------------------- */
 
-#[derive(Builder, Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct FileWriter {
-    pub path: PathBuf,
-    #[builder(default)]
-    pub contents: String,
+    file: Option<std::fs::File>,
 }
 
 /* ------------------------------ Impl: Writer ------------------------------ */
 
 impl Writer for FileWriter {
-    fn configured(mut self, import: &SchemaImport) -> anyhow::Result<Self> {
-        self.path = import.as_path().to_owned();
-        Ok(self)
-    }
-
     fn close(&mut self) -> anyhow::Result<()> {
-        std::fs::write(self.path.as_path(), &self.contents).map_err(|e| anyhow!(e))
-    }
+        if let Some(f) = self.file.take() {
+            f.sync_all().map_err(|e| anyhow!(e))?;
+        }
 
-    fn open(&mut self, _: &Path) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn write(&mut self, input: &str) -> anyhow::Result<()> {
-        self.contents.push_str(input);
+    fn open<T: AsRef<Path>>(&mut self, path: T) -> anyhow::Result<()> {
+        if self.file.is_some() {
+            return Err(anyhow!("file already open; try calling 'close' first"));
+        }
+
+        self.file = std::fs::File::create(path)
+            .map(Some)
+            .map_err(|e| anyhow!(e))?;
+
         Ok(())
+    }
+
+    fn write<T: AsRef<str>>(&mut self, input: T) -> anyhow::Result<()> {
+        match &mut self.file {
+            None => Err(anyhow!("missing file; try calling 'open' first")),
+            Some(f) => {
+                f.write_all(input.as_ref().as_bytes())
+                    .map_err(|e| anyhow!(e))?;
+                Ok(())
+            }
+        }
     }
 }

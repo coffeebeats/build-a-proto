@@ -1,25 +1,24 @@
-mod file;
-mod string;
+use std::path::Path;
 
 /* -------------------------------- Mod: File ------------------------------- */
 
-#[allow(unused_imports)]
+mod file;
 pub use file::*;
 
 /* ------------------------------- Mod: String ------------------------------ */
 
-#[allow(unused_imports)]
+mod string;
 pub use string::*;
-
-use crate::core::SchemaImport;
 
 /* -------------------------------------------------------------------------- */
 /*                                Trait: Writer                               */
 /* -------------------------------------------------------------------------- */
 
 pub trait Writer: Default {
-    fn configured(self, import: &SchemaImport) -> anyhow::Result<Self>;
+    /// `close` closes the [`Writer`], cleaning up any open resources.
     fn close(&mut self) -> anyhow::Result<()>;
-    fn open(&mut self, path: &std::path::Path) -> anyhow::Result<()>;
-    fn write(&mut self, input: &str) -> anyhow::Result<()>;
+    /// `open` opens the [`Writer`], creating any necessary resources.
+    fn open<T: AsRef<Path>>(&mut self, path: T) -> anyhow::Result<()>;
+    /// `write` writes the provided input to the opened target resource.
+    fn write<T: AsRef<str>>(&mut self, input: T) -> anyhow::Result<()>;
 }
