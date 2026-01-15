@@ -14,6 +14,12 @@ pub struct DiagnosticReporter<'a> {
 /* ------------------------ Impl: DiagnosticReporter ------------------------ */
 
 impl<'a> DiagnosticReporter<'a> {
+    /// `new` constructs a new [`DiagnosticReporter`] using the provided
+    /// [`SourceCache`] for looking up source code for error spans.
+    pub fn new(sources: &'a SourceCache) -> Self {
+        Self { sources }
+    }
+
     /// `report` prints information about the provided diagnostic to
     /// [`std::io::stderr`].
     pub fn report(&self, diagnostic: &Diagnostic) {
@@ -54,13 +60,5 @@ impl<'a> DiagnosticReporter<'a> {
             writer,
         )
         .unwrap();
-    }
-}
-
-/* ------------------------- Impl: From<SourceCache> ------------------------ */
-
-impl<'a> From<&'a SourceCache> for DiagnosticReporter<'a> {
-    fn from(sources: &'a SourceCache) -> Self {
-        Self { sources }
     }
 }

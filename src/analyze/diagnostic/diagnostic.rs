@@ -27,6 +27,7 @@ impl Diagnostic {
         }
     }
 
+    #[allow(unused)]
     /// `warning` creates a new warning [`Diagnostic`].
     pub fn warning(span: Span, message: impl Into<String>) -> Self {
         Self {

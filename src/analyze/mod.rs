@@ -13,7 +13,7 @@ pub use field_index::FieldIndexUniqueness;
 /* --------------------------- Mod: Type Reference -------------------------- */
 
 mod type_reference;
-pub use type_reference::{ReferenceError, TypeReferenceResolver};
+pub use type_reference::*;
 
 /* -------------------------------------------------------------------------- */
 /*                              Trait: Analyzer                               */

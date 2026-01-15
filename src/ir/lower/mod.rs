@@ -102,13 +102,6 @@ impl MockResolver {
     pub fn new() -> Self {
         Self { result: None }
     }
-
-    /// Creates a `MockResolver` that returns the specified result.
-    pub fn with_result(result: (Descriptor, TypeKind)) -> Self {
-        Self {
-            result: Some(result),
-        }
-    }
 }
 
 #[cfg(test)]

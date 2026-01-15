@@ -8,6 +8,7 @@ use crate::generate::Writer;
 /*                             Struct: FileWriter                             */
 /* -------------------------------------------------------------------------- */
 
+#[allow(unused)]
 #[derive(Debug, Default)]
 pub struct FileWriter {
     file: Option<std::fs::File>,

@@ -40,6 +40,7 @@ where
 /*                             Fn: inline_comment                             */
 /* -------------------------------------------------------------------------- */
 
+#[allow(unused)] // TODO(#60): Handle inline comments during parsing.
 /// `inline_comment` creates a new [`Parser`] that parses an inline comment
 /// (i.e. a comment that comes after [`Token`]s within a line).
 pub(super) fn inline_comment<'src, I>()
