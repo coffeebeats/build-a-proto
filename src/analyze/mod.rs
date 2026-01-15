@@ -5,6 +5,11 @@ use crate::visit::Visitor;
 mod diagnostic;
 pub use diagnostic::*;
 
+/* ---------------------------- Mod: Field Index ---------------------------- */
+
+mod field_index;
+pub use field_index::FieldIndexUniqueness;
+
 /* -------------------------------------------------------------------------- */
 /*                              Trait: Analyzer                               */
 /* -------------------------------------------------------------------------- */
