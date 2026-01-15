@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::core::PackageName;
+
 use super::{Enum, Message};
 
 /* -------------------------------------------------------------------------- */
@@ -11,7 +13,7 @@ use super::{Enum, Message};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Package {
     /// Full package path: "foo.bar".
-    pub path: String,
+    pub name: PackageName,
     /// Top-level messages (nested types inline).
     pub messages: Vec<Message>,
     /// Top-level enums.
