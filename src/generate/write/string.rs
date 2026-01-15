@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use crate::core::SchemaImport;
 use crate::generate::Writer;
 
 /* -------------------------------------------------------------------------- */
@@ -8,26 +7,38 @@ use crate::generate::Writer;
 /* -------------------------------------------------------------------------- */
 
 #[derive(Clone, Debug, Default)]
-#[allow(unused)]
 pub struct StringWriter(String);
+
+/* ---------------------------- Impl: StringWriter -------------------------- */
+
+impl StringWriter {
+    /// Returns the accumulated content.
+    pub fn content(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes the [`Writer`] and returns the accumulated content.
+    pub fn into_content(self) -> String {
+        self.0
+    }
+}
 
 /* ------------------------------ Impl: Writer ------------------------------ */
 
 impl Writer for StringWriter {
-    fn configured(self, _: &SchemaImport) -> anyhow::Result<Self> {
-        Ok(self)
-    }
-
     fn close(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn open(&mut self, _: &Path) -> anyhow::Result<()> {
+    fn open<T>(&mut self, _: T) -> anyhow::Result<()>
+    where
+        T: AsRef<Path>,
+    {
         Ok(())
     }
 
-    fn write(&mut self, input: &str) -> anyhow::Result<()> {
-        self.0.push_str(input);
+    fn write<T: AsRef<str>>(&mut self, input: T) -> anyhow::Result<()> {
+        self.0.push_str(input.as_ref());
         Ok(())
     }
 }
