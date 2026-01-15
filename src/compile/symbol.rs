@@ -19,11 +19,13 @@ pub struct Symbols<T: Clone> {
 /* ----------------------------- Impl: Symbols ------------------------------ */
 
 impl<T: Clone> Symbols<T> {
+    #[allow(unused)]
     /// `contains` checks if a type [`Descriptor`] exists in the symbol table.
     pub fn contains(&self, desc: &Descriptor) -> bool {
         self.types.contains_key(desc)
     }
 
+    #[allow(unused)]
     /// `get` looks up stored data for the specified [`Descriptor`].
     pub fn get(&self, desc: &Descriptor) -> Option<T> {
         self.types.get(desc).cloned()

@@ -12,11 +12,6 @@ pub struct StringWriter(String);
 /* ---------------------------- Impl: StringWriter -------------------------- */
 
 impl StringWriter {
-    /// Returns the accumulated content.
-    pub fn content(&self) -> &str {
-        &self.0
-    }
-
     /// Consumes the [`Writer`] and returns the accumulated content.
     pub fn into_content(self) -> String {
         self.0

@@ -11,4 +11,5 @@ pub use visitor::Visitor;
 /* -------------------------------- Mod: Walk ------------------------------- */
 
 pub mod walk;
+#[allow(unused_imports)]
 pub use walk::*;
