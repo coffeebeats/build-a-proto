@@ -131,7 +131,7 @@ impl<'a, 'b, R: super::TypeResolver<TypeKind>> Lower<'a, Encoding, FieldTypeCont
         let scope = &field_ctx.ctx.scope;
 
         // Use TypeResolver to resolve the reference
-        let (descriptor, kind) = field_ctx.ctx.resolver.resolve(&scope, self)?;
+        let (descriptor, kind) = field_ctx.ctx.resolver.resolve(scope, self)?;
 
         // Map kind to NativeType
         let native = match kind {

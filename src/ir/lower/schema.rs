@@ -16,11 +16,10 @@ impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Package, LowerContext<'a, R>> for 
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Package> {
         // Extract package name from schema
         let package = self.get_package_name()?;
-        let package_path = package.to_string();
 
         // Create root context for this package (reuse resolver from parent context)
         let root = Descriptor {
-            package,
+            package: package.clone(),
             path: vec![],
         };
         let pkg_ctx = LowerContext::new(ctx.resolver, root);
@@ -46,7 +45,7 @@ impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Package, LowerContext<'a, R>> for 
         }
 
         Some(Package {
-            path: package_path,
+            name: package,
             messages,
             enums,
         })
@@ -60,6 +59,7 @@ impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Package, LowerContext<'a, R>> for 
 #[cfg(test)]
 mod tests {
     use crate::ast;
+    use crate::core::PackageName;
     use crate::ir::lower;
     use crate::lex::Span;
 
@@ -90,7 +90,10 @@ mod tests {
         // Then: Should produce package with no types.
         assert!(result.is_some());
         let package = result.unwrap();
-        assert_eq!(package.path, "mypackage");
+        assert_eq!(
+            package.name,
+            PackageName::try_from(vec!["mypackage"]).unwrap()
+        );
         assert!(package.messages.is_empty());
         assert!(package.enums.is_empty());
     }
@@ -273,7 +276,10 @@ mod tests {
         // Then: Should correctly format package path.
         assert!(result.is_some());
         let package = result.unwrap();
-        assert_eq!(package.path, "com.example.game");
+        assert_eq!(
+            package.name,
+            PackageName::try_from(vec!["com", "example", "game"]).unwrap()
+        );
     }
 
     #[test]

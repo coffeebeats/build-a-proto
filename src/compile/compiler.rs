@@ -196,7 +196,7 @@ impl Compiler {
             None => return, // No package declaration or lowering failed
         };
 
-        if let Some(existing) = self.ir.packages.iter_mut().find(|p| p.path == package.path) {
+        if let Some(existing) = self.ir.packages.iter_mut().find(|p| p.name == package.name) {
             existing.messages.extend(package.messages);
             existing.enums.extend(package.enums);
         } else {

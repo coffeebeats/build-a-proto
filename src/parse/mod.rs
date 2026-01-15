@@ -1,37 +1,37 @@
 /* ------------------------------ Mod: Comment ------------------------------ */
 
-pub(self) mod comment;
-pub(self) use comment::*;
+mod comment;
+use comment::*;
 
 /* ------------------------------ Mod: Encoding ----------------------------- */
 
-pub(self) mod encoding;
-pub(self) use encoding::*;
+mod encoding;
+use encoding::*;
 
 /* ---------------------------- Mod: Enumeration ---------------------------- */
 
-pub(self) mod enumeration;
-pub(self) use enumeration::*;
+mod enumeration;
+use enumeration::*;
 
 /* ------------------------------ Mod: Message ------------------------------ */
 
-pub(self) mod message;
-pub(self) use message::*;
+mod message;
+use message::*;
 
 /* ------------------------------ Mod: Package ------------------------------ */
 
-pub(self) mod package;
-pub(self) use package::*;
+mod package;
+use package::*;
 
 /* ------------------------------- Mod: Schema ------------------------------ */
 
-pub(self) mod schema;
-pub(self) use schema::*;
+mod schema;
+use schema::*;
 
 /* ------------------------------- Mod: Types ------------------------------- */
 
-pub(self) mod types;
-pub(self) use types::*;
+mod types;
+use types::*;
 
 /* -------------------------------------------------------------------------- */
 /*                                  Fn: Parse                                 */
@@ -90,8 +90,7 @@ pub type ParseError<'src> = Rich<'src, Token<'src>, Span>;
 /* -------------------------------- Fn: text -------------------------------- */
 
 /// `text` creates a new string literal [`Parser`].
-pub(self) fn text<'src, I>()
--> impl Parser<'src, I, ast::Text, chumsky::extra::Err<ParseError<'src>>>
+fn text<'src, I>() -> impl Parser<'src, I, ast::Text, chumsky::extra::Err<ParseError<'src>>>
 where
     I: ValueInput<'src, Token = Token<'src>, Span = Span>,
 {
@@ -105,8 +104,7 @@ where
 /* -------------------------------- Fn: ident ------------------------------- */
 
 /// `ident` creates a new identifier [`Parser`].
-pub(self) fn ident<'src, I>()
--> impl Parser<'src, I, ast::Ident, chumsky::extra::Err<ParseError<'src>>>
+fn ident<'src, I>() -> impl Parser<'src, I, ast::Ident, chumsky::extra::Err<ParseError<'src>>>
 where
     I: ValueInput<'src, Token = Token<'src>, Span = Span>,
 {
@@ -120,8 +118,7 @@ where
 /* -------------------------------- Fn: uint -------------------------------- */
 
 /// `uint` creates a new unsigned integer [`Parser`].
-pub(self) fn uint<'src, I>()
--> impl Parser<'src, I, ast::Uint, chumsky::extra::Err<ParseError<'src>>>
+fn uint<'src, I>() -> impl Parser<'src, I, ast::Uint, chumsky::extra::Err<ParseError<'src>>>
 where
     I: ValueInput<'src, Token = Token<'src>, Span = Span>,
 {

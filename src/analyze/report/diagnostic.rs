@@ -54,7 +54,7 @@ pub enum Severity {
 
 /* ----------------------- Impl: Into<ariadne::Color> ----------------------- */
 
-impl<'a> From<Severity> for ariadne::Color {
+impl From<Severity> for ariadne::Color {
     fn from(value: Severity) -> Self {
         match value {
             Severity::Error => Self::Red,
