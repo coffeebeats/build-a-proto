@@ -1,5 +1,7 @@
 use derive_more::Display;
 
+use crate::lex::Span;
+
 /* ------------------------------ Mod: Comment ------------------------------ */
 
 mod comment;
@@ -44,7 +46,7 @@ pub use types::*;
 #[display("{}", name)]
 pub struct Ident {
     pub name: String,
-    pub span: crate::lex::Span,
+    pub span: Span,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -56,7 +58,7 @@ pub struct Ident {
 #[display("{}", content)]
 pub struct Text {
     pub content: String,
-    pub span: crate::lex::Span,
+    pub span: Span,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -68,5 +70,5 @@ pub struct Text {
 #[display("{}", value)]
 pub struct Uint<T = u64> {
     pub value: T,
-    pub span: crate::lex::Span,
+    pub span: Span,
 }

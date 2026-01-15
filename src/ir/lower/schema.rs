@@ -22,7 +22,6 @@ impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Package, LowerContext<'a, R>> for 
         let root = Descriptor {
             package,
             path: vec![],
-            name: None,
         };
         let pkg_ctx = LowerContext::new(ctx.resolver, root);
 
@@ -131,7 +130,7 @@ mod tests {
         assert!(result.is_some());
         let package = result.unwrap();
         assert_eq!(package.messages.len(), 1);
-        assert_eq!(package.messages[0].name, "Player");
+        assert_eq!(package.messages[0].name(), Some("Player"));
     }
 
     #[test]
@@ -169,7 +168,7 @@ mod tests {
         assert!(result.is_some());
         let package = result.unwrap();
         assert_eq!(package.enums.len(), 1);
-        assert_eq!(package.enums[0].name, "Status");
+        assert_eq!(package.enums[0].name(), Some("Status"));
     }
 
     #[test]
@@ -201,9 +200,9 @@ mod tests {
         assert!(result.is_some());
         let package = result.unwrap();
         assert_eq!(package.messages.len(), 3);
-        assert_eq!(package.messages[0].name, "Player");
-        assert_eq!(package.messages[1].name, "Enemy");
-        assert_eq!(package.messages[2].name, "Item");
+        assert_eq!(package.messages[0].name(), Some("Player"));
+        assert_eq!(package.messages[1].name(), Some("Enemy"));
+        assert_eq!(package.messages[2].name(), Some("Item"));
     }
 
     #[test]
@@ -237,8 +236,8 @@ mod tests {
         let package = result.unwrap();
         assert_eq!(package.messages.len(), 2);
         assert_eq!(package.enums.len(), 2);
-        assert_eq!(package.messages[0].name, "Config");
-        assert_eq!(package.enums[0].name, "Mode");
+        assert_eq!(package.messages[0].name(), Some("Config"));
+        assert_eq!(package.enums[0].name(), Some("Mode"));
     }
 
     #[test]
@@ -324,9 +323,9 @@ mod tests {
         let package = result.unwrap();
         assert_eq!(package.messages.len(), 2);
         assert_eq!(package.enums.len(), 1);
-        assert_eq!(package.messages[0].name, "First");
-        assert_eq!(package.messages[1].name, "Third");
-        assert_eq!(package.enums[0].name, "Second");
+        assert_eq!(package.messages[0].name(), Some("First"));
+        assert_eq!(package.messages[1].name(), Some("Third"));
+        assert_eq!(package.enums[0].name(), Some("Second"));
     }
 
     /* ---------------------------- Fn: make_enum --------------------------- */

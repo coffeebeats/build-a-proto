@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::core::Descriptor;
+
 use super::{Encoding, Field};
 
 /* -------------------------------------------------------------------------- */
@@ -9,21 +11,29 @@ use super::{Encoding, Field};
 /// `Enum` represents a fully resolved enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Enum {
-    /// Full descriptor: "foo.bar.MyEnum".
-    pub descriptor: String,
-    /// Simple name: "MyEnum".
-    pub name: String,
-    /// How the discriminant is encoded.
+    /// `descriptor` uniquely identifies the [`Enum`].
+    pub descriptor: Descriptor,
+    /// `discriminant` describes the [`Enum`]'s discriminant encoding.
     pub discriminant: Encoding,
-    /// Enum variants.
-    pub variants: Vec<Variant>,
-    /// Documentation comment.
+    /// `doc` is a doc comment for the [`Enum`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doc: Option<String>,
+
+    /// `variants` in serialization order.
+    pub variants: Vec<Variant>,
+}
+
+/* ------------------------------- Impl: Enum ------------------------------- */
+
+impl Enum {
+    /// `name` returns the name of the [`Enum`].
+    pub fn name(&self) -> Option<&str> {
+        self.descriptor.name()
+    }
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               Enum: Variant                                */
+/*                                Enum: Variant                               */
 /* -------------------------------------------------------------------------- */
 
 /// `Variant` represents an enum variant (unit or data-carrying).

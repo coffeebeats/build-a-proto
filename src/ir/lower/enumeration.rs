@@ -1,3 +1,5 @@
+use super::TypeKind;
+
 use crate::ast;
 use crate::ir::{Encoding, Enum, NativeType, Variant, WireFormat};
 
@@ -11,10 +13,8 @@ use super::{Lower, LowerContext, TypeResolver};
 
 impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Enum, LowerContext<'a, R>> for ast::Enum {
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Enum> {
-        let name = self.name.name.clone();
-        let descriptor = ctx.build_child_descriptor(&name);
-
-        let child_ctx = ctx.with_child(name.clone());
+        let name = self.name.name.to_string();
+        let child_ctx = ctx.with(&name);
 
         let mut variants = Vec::new();
         for item in &self.items {
@@ -59,11 +59,10 @@ impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Enum, LowerContext<'a, R>> for ast
         let doc = self.comment.as_ref().and_then(|c| c.lower(ctx));
 
         Some(Enum {
-            descriptor,
-            name,
+            descriptor: child_ctx.scope,
             discriminant,
-            variants,
             doc,
+            variants,
         })
     }
 }
@@ -361,9 +360,9 @@ mod tests {
 
         // Then: Should generate proper descriptor.
         assert!(result.is_some());
-        let ir_enum = result.unwrap();
-        assert_eq!(ir_enum.name, "MyEnum");
-        assert!(ir_enum.descriptor.contains("MyEnum"));
+        let enm = result.unwrap();
+        assert_eq!(enm.name(), Some("MyEnum"));
+        assert!(enm.descriptor.to_string().contains("MyEnum"));
     }
 
     #[test]
