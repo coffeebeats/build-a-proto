@@ -11,7 +11,7 @@ use crate::ir::lower::TypeResolver;
 /* -------------------------------------------------------------------------- */
 
 /// `Symbols` is a symbol table tracking type data during compilation.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Symbols<T: Clone> {
     types: HashMap<Descriptor, T>,
 }
@@ -106,6 +106,16 @@ impl<T: Clone> Symbols<T> {
         }
 
         None
+    }
+}
+
+/* ------------------------------ Impl: Default ----------------------------- */
+
+impl<T: Clone> Default for Symbols<T> {
+    fn default() -> Self {
+        Self {
+            types: Default::default(),
+        }
     }
 }
 
