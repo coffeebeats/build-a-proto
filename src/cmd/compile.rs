@@ -97,7 +97,7 @@ pub fn handle(args: Args) -> anyhow::Result<()> {
     let ir = ir::Schema::from(compiler);
 
     let generator: Box<dyn Generator> = if args.generator.rust {
-        Box::new(RustGenerator::default())
+        Box::new(RustGenerator)
     } else if let Some(plugin_path) = args.generator.plugin {
         Box::new(ExternalGenerator::new(plugin_path).map_err(|e| anyhow!(e))?)
     } else {

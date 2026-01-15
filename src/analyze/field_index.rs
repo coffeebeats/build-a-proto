@@ -69,15 +69,15 @@ impl<'ast> Visitor<'ast> for FieldIndexUniqueness {
         let mut seen: HashMap<u64, Span> = HashMap::new();
 
         for item in &msg.items {
-            if let ast::MessageItem::Field(field) = item {
-                if let Some(index) = &field.index {
-                    let val = index.value.value;
-                    if let Some(prev_span) = seen.get(&val) {
-                        let error = FieldIndexUniqueness::diagnostic(val, prev_span, &index.span);
-                        self.diagnostics.push(error);
-                    } else {
-                        seen.insert(val, index.span.clone());
-                    }
+            if let ast::MessageItem::Field(field) = item
+                && let Some(index) = &field.index
+            {
+                let val = index.value.value;
+                if let Some(prev_span) = seen.get(&val) {
+                    let error = FieldIndexUniqueness::diagnostic(val, prev_span, &index.span);
+                    self.diagnostics.push(error);
+                } else {
+                    seen.insert(val, index.span.clone());
                 }
             }
         }

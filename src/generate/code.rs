@@ -47,7 +47,7 @@ impl CodeWriter {
 
     /// Writes indentation at the current level.
     fn write_indent<W: Writer>(&self, w: &mut W) -> anyhow::Result<()> {
-        w.write(&self.get_indent())?;
+        w.write(self.get_indent())?;
         Ok(())
     }
 
@@ -86,7 +86,7 @@ impl CodeWriter {
         if text.is_empty() {
             w.write(&self.comment_token)?;
         } else {
-            w.write(&format!("{} {}", self.comment_token, text))?;
+            w.write(format!("{} {}", self.comment_token, text))?;
         }
         w.write(&self.newline_token)?;
         Ok(())

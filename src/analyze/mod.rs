@@ -1,16 +1,14 @@
 use crate::visit::Visitor;
 
-/* ----------------------------- Mod: Diagnostic ---------------------------- */
+/* ------------------------------- Mod: Report ------------------------------ */
 
-mod diagnostic;
-pub use diagnostic::*;
+mod report;
+pub use report::*;
 
-/* ---------------------------- Mod: Field Index ---------------------------- */
+/* ----------------------------- Mod: Analyzers ----------------------------- */
 
 mod field_index;
 pub use field_index::FieldIndexUniqueness;
-
-/* --------------------------- Mod: Type Reference -------------------------- */
 
 mod type_reference;
 pub use type_reference::*;

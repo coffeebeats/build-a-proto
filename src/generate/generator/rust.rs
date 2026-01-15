@@ -14,8 +14,9 @@ use crate::ir;
 ///
 /// This is a wrapper around the visitor-pattern generator that provides
 /// the simple Generator trait API expected by the CLI.
-#[derive(Default)]
 pub struct RustGenerator;
+
+/* ----------------------------- Impl: Generator ---------------------------- */
 
 impl Generator for RustGenerator {
     fn name(&self) -> &str {

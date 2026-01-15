@@ -19,7 +19,7 @@ pub struct SourceCache {
 impl SourceCache {
     /// `read` retrieves the source contents for a file, if it exists.
     pub fn read(&self, file: &SchemaImport) -> Option<Rc<String>> {
-        self.cache.get(file).map(|s| s.clone())
+        self.cache.get(file).cloned()
     }
 
     /// `insert` adds the source contents of a file into the cache.

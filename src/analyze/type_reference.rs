@@ -378,10 +378,7 @@ mod tests {
 
     fn make_test_reference(components: Vec<&str>, is_absolute: bool) -> ast::Reference {
         ast::Reference {
-            components: components
-                .into_iter()
-                .map(|name| make_test_ident(name))
-                .collect(),
+            components: components.into_iter().map(make_test_ident).collect(),
             is_absolute,
             span: make_test_span(),
         }

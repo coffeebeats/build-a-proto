@@ -172,7 +172,7 @@ fn find_package_dependencies<'a>(
 
     fn scan_native_type(
         native: &ir::NativeType,
-        current_pkg: &PackageName,
+        _current_pkg: &PackageName,
         deps: &mut HashSet<PackageName>,
     ) {
         match native {
@@ -180,11 +180,11 @@ fn find_package_dependencies<'a>(
                 deps.insert(descriptor.package.clone());
             }
             ir::NativeType::Array { element } => {
-                scan_native_type(&element.native, current_pkg, deps);
+                scan_native_type(&element.native, _current_pkg, deps);
             }
             ir::NativeType::Map { key, value } => {
-                scan_native_type(&key.native, current_pkg, deps);
-                scan_native_type(&value.native, current_pkg, deps);
+                scan_native_type(&key.native, _current_pkg, deps);
+                scan_native_type(&value.native, _current_pkg, deps);
             }
             _ => {}
         }
