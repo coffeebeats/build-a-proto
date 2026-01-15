@@ -10,7 +10,7 @@ use crate::visit::{Visitor, walk};
 /* -------------------------------------------------------------------------- */
 
 /// `FieldIndexUniqueness` validates that field indices within each
-/// [`ast::Message`] and [`ast::Enum`]are unique.
+/// [`ast::Message`] and [`ast::Enum`] are unique.
 #[derive(Default)]
 pub struct FieldIndexUniqueness {
     diagnostics: Vec<Diagnostic>,
@@ -30,7 +30,7 @@ impl FieldIndexUniqueness {
     }
 }
 
-/* ------------------------- Impl: Analyzer --------------------------------- */
+/* ----------------------------- Impl: Analyzer ----------------------------- */
 
 impl Analyzer for FieldIndexUniqueness {
     fn drain_diagnostics(&mut self) -> Vec<Diagnostic> {

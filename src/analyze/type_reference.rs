@@ -8,7 +8,7 @@ use crate::ir::lower::TypeKind;
 use crate::visit::{Visitor, walk};
 
 /* -------------------------------------------------------------------------- */
-/*                       Struct: TypeReferenceResolver                        */
+/*                        Struct: TypeReferenceResolver                       */
 /* -------------------------------------------------------------------------- */
 
 /// Analyzer that validates all type references resolve to existing types.
@@ -77,7 +77,7 @@ impl Analyzer for TypeReferenceResolver<'_> {
     }
 }
 
-/* ------------------- Impl: Visitor<TypeReferenceResolver> ---------------- */
+/* ------------------------------ Impl: Visitor ----------------------------- */
 
 impl<'ast> Visitor<'ast> for TypeReferenceResolver<'_> {
     fn visit_message(&mut self, msg: &'ast ast::Message) {
