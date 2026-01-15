@@ -1,8 +1,3 @@
-//! AST-to-IR lowering logic using a trait-based approach.
-//!
-//! Each AST type implements the `Lower` trait, which converts it to the
-//! corresponding IR type given a lowering context.
-
 mod comment;
 mod encoding;
 mod enumeration;
@@ -11,40 +6,8 @@ mod message;
 mod schema;
 mod types;
 
+use crate::ast;
 use crate::core::Descriptor;
-
-/* -------------------------------------------------------------------------- */
-/*                               Enum: TypeKind                               */
-/* -------------------------------------------------------------------------- */
-
-/// `TypeKind` represents the kind of a type definition.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TypeKind {
-    Message,
-    Enum,
-}
-
-/* -------------------------------------------------------------------------- */
-/*                            Trait: TypeResolver                             */
-/* -------------------------------------------------------------------------- */
-
-/// `TypeResolver` provides symbol resolution for lowering references to IR.
-///
-/// Implementors are responsible for validating that references exist and
-/// returning their resolved descriptor and kind.
-pub trait TypeResolver {
-    /// `resolve` looks up a type reference and returns its descriptor and kind.
-    ///
-    /// - `scope`: The current scope (package + parent type path)
-    /// - `reference`: The reference components as strings
-    /// - `is_absolute`: Whether the reference starts with `.`
-    fn resolve(
-        &self,
-        scope: &[String],
-        reference: &[String],
-        is_absolute: bool,
-    ) -> Option<(String, TypeKind)>;
-}
 
 /* -------------------------------------------------------------------------- */
 /*                                Trait: Lower                                */
@@ -59,57 +22,71 @@ pub trait Lower<'a, T, Ctx> {
     fn lower(&'a self, ctx: &'a Ctx) -> Option<T>;
 }
 
-/* -------------------------------------------------------------------------- */
-/*                            Struct: LowerContext                            */
-/* -------------------------------------------------------------------------- */
+/* -------------------------- Struct: LowerContext -------------------------- */
 
 /// `LowerContext` provides the environment needed for lowering AST to IR.
 #[derive(Clone)]
-pub struct LowerContext<'a, R: TypeResolver> {
+pub struct LowerContext<'a, R: TypeResolver<TypeKind>> {
     /// Type resolver for looking up referenced types.
     pub resolver: &'a R,
-    /// Parent descriptor (defines the current scope).
-    pub parent: Descriptor,
+    /// `scope` uniquely identifies the current scope.
+    pub scope: Descriptor,
 }
 
 /* --------------------------- Impl: LowerContext --------------------------- */
 
-impl<'a, R: TypeResolver> LowerContext<'a, R> {
+impl<'a, R: TypeResolver<TypeKind>> LowerContext<'a, R> {
     /// `new` creates a new root context for lowering a top-level schema.
-    pub fn new(resolver: &'a R, parent: Descriptor) -> Self {
-        Self { resolver, parent }
+    pub fn new(resolver: &'a R, scope: Descriptor) -> Self {
+        Self { resolver, scope }
     }
 
-    /// `with_child` creates a child context by extending the parent descriptor.
-    pub fn with_child(&self, name: String) -> Self {
-        let mut path = self.parent.path.clone();
-        if let Some(parent_name) = &self.parent.name {
-            path.push(parent_name.clone());
-        }
+    /// `with` creates a child context by extending the parent descriptor.
+    pub fn with<T>(&self, name: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        let mut path = self.scope.path.clone();
+        path.push(name.as_ref().to_owned());
 
         Self {
             resolver: self.resolver,
-            parent: Descriptor {
-                package: self.parent.package.clone(),
+            scope: Descriptor {
+                package: self.scope.package.clone(),
                 path,
-                name: Some(name),
             },
         }
     }
+}
 
-    /// Returns the current scope as a slice of strings.
-    pub fn scope(&self) -> Vec<String> {
-        let mut scope = self.parent.path.clone();
-        if let Some(name) = &self.parent.name {
-            scope.push(name.clone());
-        }
-        scope
-    }
+/* -------------------------------------------------------------------------- */
+/*                            Trait: TypeResolver                             */
+/* -------------------------------------------------------------------------- */
 
-    /// Builds a descriptor for a child type.
-    pub fn build_child_descriptor(&self, name: &str) -> String {
-        self.with_child(name.to_string()).parent.to_string()
-    }
+/// `TypeResolver` provides symbol resolution for lowering references to IR.
+///
+/// Implementors are responsible for validating that references exist and
+/// returning their resolved descriptor and associated data.
+pub trait TypeResolver<T> {
+    /// `resolve` looks up a type reference and returns its descriptor and data.
+    ///
+    /// - `scope`: The current scope (package + parent type path)
+    /// - `reference`: The reference components as strings
+    fn resolve(
+        &self,
+        scope: &Descriptor,
+        reference: &ast::Reference,
+    ) -> Option<(Descriptor, T)>;
+}
+
+/* ----------------------------- Enum: TypeKind ----------------------------- */
+
+/// `TypeKind` represents the kind of a type definition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TypeKind {
+    Message,
+    Enum,
+    Package,
 }
 
 /* -------------------------------------------------------------------------- */
@@ -118,7 +95,7 @@ impl<'a, R: TypeResolver> LowerContext<'a, R> {
 
 #[cfg(test)]
 pub(super) struct MockResolver {
-    pub result: Option<(String, TypeKind)>,
+    pub result: Option<(Descriptor, TypeKind)>,
 }
 
 /* --------------------------- Impl: TypeResolver --------------------------- */
@@ -131,7 +108,7 @@ impl MockResolver {
     }
 
     /// Creates a `MockResolver` that returns the specified result.
-    pub fn with_result(result: (String, TypeKind)) -> Self {
+    pub fn with_result(result: (Descriptor, TypeKind)) -> Self {
         Self {
             result: Some(result),
         }
@@ -139,13 +116,12 @@ impl MockResolver {
 }
 
 #[cfg(test)]
-impl TypeResolver for MockResolver {
+impl TypeResolver<TypeKind> for MockResolver {
     fn resolve(
         &self,
-        _scope: &[String],
-        _reference: &[String],
-        _is_absolute: bool,
-    ) -> Option<(String, TypeKind)> {
+        _scope: &Descriptor,
+        _reference: &ast::Reference,
+    ) -> Option<(Descriptor, TypeKind)> {
         self.result.clone()
     }
 }
@@ -159,13 +135,10 @@ pub(super) fn make_context<'a>(resolver: &'a MockResolver) -> LowerContext<'a, M
     use crate::core::DescriptorBuilder;
     use crate::core::PackageName;
 
-    let desc = DescriptorBuilder::default()
+    let scope = DescriptorBuilder::default()
         .package(PackageName::try_from(vec!["test".to_string()]).unwrap())
         .build()
         .unwrap();
 
-    LowerContext {
-        resolver,
-        parent: desc,
-    }
+    LowerContext { resolver, scope }
 }

@@ -1,3 +1,5 @@
+use super::TypeKind;
+
 use crate::ast;
 use crate::core::Descriptor;
 use crate::ir::Package;
@@ -10,7 +12,7 @@ use super::{Lower, LowerContext, TypeResolver};
 
 /* --------------------------- Struct: ast::Schema -------------------------- */
 
-impl<'a, R: TypeResolver> Lower<'a, Package, LowerContext<'a, R>> for ast::Schema {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Package, LowerContext<'a, R>> for ast::Schema {
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Package> {
         // Extract package name from schema
         let package = self.get_package_name()?;

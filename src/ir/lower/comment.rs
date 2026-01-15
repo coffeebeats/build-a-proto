@@ -1,3 +1,5 @@
+use super::TypeKind;
+
 use crate::ast;
 
 use super::{Lower, LowerContext, TypeResolver};
@@ -6,7 +8,7 @@ use super::{Lower, LowerContext, TypeResolver};
 /*                                 Impl: Lower                                */
 /* -------------------------------------------------------------------------- */
 
-impl<'a, R: TypeResolver> Lower<'a, String, LowerContext<'a, R>> for ast::CommentBlock {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, String, LowerContext<'a, R>> for ast::CommentBlock {
     fn lower(&'a self, _ctx: &'a LowerContext<'a, R>) -> Option<String> {
         let doc = self
             .comments

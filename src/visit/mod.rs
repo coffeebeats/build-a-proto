@@ -10,6 +10,5 @@ pub use visitor::Visitor;
 
 /* -------------------------------- Mod: Walk ------------------------------- */
 
-mod walk;
-#[allow(unused)]
+pub mod walk;
 pub use walk::*;

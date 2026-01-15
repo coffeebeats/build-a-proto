@@ -7,7 +7,7 @@ use super::{Lower, LowerContext, TypeResolver};
 /*                                 Impl: Lower                                */
 /* -------------------------------------------------------------------------- */
 
-impl<'a, R: TypeResolver> Lower<'a, Message, LowerContext<'a, R>> for ast::Message {
+impl<'a, R: TypeResolver<TypeKind>> Lower<'a, Message, LowerContext<'a, R>> for ast::Message {
     fn lower(&'a self, ctx: &'a LowerContext<'a, R>) -> Option<Message> {
         let name = self.name.name.clone();
         let descriptor = ctx.build_child_descriptor(&name);
