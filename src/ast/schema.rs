@@ -29,11 +29,18 @@ pub enum SchemaItem {
 /* ------------------------------ Impl: Schema ------------------------------ */
 
 impl Schema {
+    /// `get_package_name` returns a valid [`PackageName`] parsed from the
+    /// [`Schema`]. Note that to be valid, the package declaration must come
+    /// before all other non-comment statements.
     pub fn get_package_name(&self) -> Option<PackageName> {
-        self.items.iter().find_map(|item| match item {
-            ast::SchemaItem::Package(pkg) => PackageName::try_from(pkg.clone()).ok(),
-            _ => None,
-        })
+        self.items
+            .iter()
+            .filter(|item| !matches!(item, ast::SchemaItem::CommentBlock(_)))
+            .next()
+            .and_then(|item| match item {
+                ast::SchemaItem::Package(pkg) => PackageName::try_from(pkg.clone()).ok(),
+                _ => None,
+            })
     }
 
     /// `iter_includes` returns an iterator over [`Include`] items.
