@@ -125,7 +125,7 @@ impl Compiler {
         let tokens = result.tokens.ok_or_else(|| {
             vec![Diagnostic::error(
                 Span::default(),
-                "lexing failed with no specific error".to_string(),
+                "lexing failed with no specific error",
             )]
         })?;
 
@@ -142,7 +142,7 @@ impl Compiler {
         result.ast.ok_or_else(|| {
             vec![Diagnostic::error(
                 Span::default(),
-                "parse failed with no specific error".to_string(),
+                "parse failed with no specific error",
             )]
         })
     }

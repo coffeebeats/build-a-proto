@@ -34,9 +34,7 @@ impl Schema {
     /// before all other non-comment statements.
     pub fn get_package_name(&self) -> Option<PackageName> {
         self.items
-            .iter()
-            .filter(|item| !matches!(item, ast::SchemaItem::CommentBlock(_)))
-            .next()
+            .iter().find(|item| !matches!(item, ast::SchemaItem::CommentBlock(_)))
             .and_then(|item| match item {
                 ast::SchemaItem::Package(pkg) => PackageName::try_from(pkg.clone()).ok(),
                 _ => None,

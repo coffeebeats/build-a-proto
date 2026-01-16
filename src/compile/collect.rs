@@ -50,7 +50,7 @@ impl<'a> TypeCollector<'a> {
             None => {
                 return vec![Diagnostic::error(
                     Span::default(),
-                    "schema missing package declaration".to_string(),
+                    "schema missing package declaration",
                 )];
             }
         };
@@ -120,7 +120,7 @@ impl<'ast> Visitor<'ast> for TypeCollector<'_> {
         if self.package.is_none() {
             self.diagnostics.push(Diagnostic::error(
                 node.span.clone(),
-                format!("'include' statement cannot come before 'package' declaration"),
+                "'include' statement cannot come before 'package' declaration",
             ));
         }
     }
@@ -129,7 +129,7 @@ impl<'ast> Visitor<'ast> for TypeCollector<'_> {
         if self.package.is_none() {
             self.diagnostics.push(Diagnostic::error(
                 msg.span.clone(),
-                format!("'message' definition cannot come before 'package' declaration"),
+                "'message' definition cannot come before 'package' declaration",
             ));
         }
 
@@ -146,7 +146,7 @@ impl<'ast> Visitor<'ast> for TypeCollector<'_> {
         if self.package.is_none() {
             self.diagnostics.push(Diagnostic::error(
                 enm.span.clone(),
-                format!("'enum' definition cannot come before 'package' declaration"),
+                "'enum' definition cannot come before 'package' declaration",
             ));
         }
 

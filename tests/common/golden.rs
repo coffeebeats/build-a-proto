@@ -90,7 +90,7 @@ fn should_update_goldens() -> bool {
     env::var("BAPROTO_UPDATE_GOLDENS")
         .map(|v| {
             let v = v.to_ascii_lowercase();
-            vec!["1", "y", "yes", "true"].contains(&v.as_str())
+            ["1", "y", "yes", "true"].contains(&v.as_str())
         })
         .unwrap_or(false)
 }
