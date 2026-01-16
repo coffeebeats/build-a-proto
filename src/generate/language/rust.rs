@@ -85,8 +85,10 @@ impl<W: Writer> Language<W> for Rust {
 
         // Imports
         self.0.writeln(w, "use std::collections::HashMap;")?;
-        self.0.writeln(w, "use std::io::{Read, Write};")?;
         self.0.blank_line(w)?;
+
+        // Generate helper module
+        self.gen_helpers(w)?;
 
         Ok(())
     }
@@ -172,28 +174,76 @@ impl<W: Writer> Language<W> for Rust {
         self.0.writeln(w, "}")?;
         self.0.blank_line(w)?;
 
-        // Encode stub
-        self.0.comment(w, "Encodes this message to a writer.")?;
+        // Public encode method
+        self.0.comment(w, "Encodes this message to a buffer, returning bytes written.")?;
         self.0.writeln(
             w,
-            "pub fn encode(&self, _writer: &mut [u8]) -> std::io::Result<()> {",
+            "pub fn encode(&self, buffer: &mut [u8]) -> Result<usize, _baproto::EncodeError> {",
         )?;
         self.0.indent();
-        self.0
-            .writeln(w, "todo!(\"serialization not yet implemented\")")?;
+        self.0.writeln(w, "buffer.fill(0);")?;
+        self.0.writeln(w, "let mut writer = _baproto::BitWriter::new(buffer);")?;
+        self.0.writeln(w, "self.encode_into(&mut writer)?;")?;
+        self.0.writeln(w, "Ok(writer.finish())")?;
         self.0.outdent();
         self.0.writeln(w, "}")?;
         self.0.blank_line(w)?;
 
-        // Decode stub
-        self.0.comment(w, "Decodes a message from a reader.")?;
+        // Public decode method
+        self.0.comment(w, "Decodes a message from a buffer, returning (message, bytes consumed).")?;
         self.0.writeln(
             w,
-            "pub fn decode(_reader: &[u8]) -> std::io::Result<Self> {",
+            "pub fn decode(buffer: &[u8]) -> Result<(Self, usize), _baproto::DecodeError> {",
         )?;
         self.0.indent();
-        self.0
-            .writeln(w, "todo!(\"deserialization not yet implemented\")")?;
+        self.0.writeln(w, "let mut reader = _baproto::BitReader::new(buffer);")?;
+        self.0.writeln(w, "let msg = Self::decode_from(&mut reader)?;")?;
+        self.0.writeln(w, "Ok((msg, reader.bytes_consumed()))")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // Internal encode_into method
+        self.0.comment(w, "Internal encoding using BitWriter.")?;
+        self.0.writeln(
+            w,
+            "fn encode_into(&self, w: &mut _baproto::BitWriter) -> Result<(), _baproto::EncodeError> {",
+        )?;
+        self.0.indent();
+
+        // Encode each field
+        let current_pkg = msg.descriptor.package.clone();
+        for field in &msg.fields {
+            self.gen_field_encode(field, &current_pkg, w)?;
+        }
+
+        self.0.writeln(w, "Ok(())")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // Internal decode_from method
+        self.0.comment(w, "Internal decoding using BitReader.")?;
+        self.0.writeln(
+            w,
+            "fn decode_from(r: &mut _baproto::BitReader) -> Result<Self, _baproto::DecodeError> {",
+        )?;
+        self.0.indent();
+
+        // Decode each field
+        for field in &msg.fields {
+            self.gen_field_decode(field, &current_pkg, w)?;
+        }
+
+        // Construct message
+        self.0.writeln(w, "Ok(Self {")?;
+        self.0.indent();
+        for field in &msg.fields {
+            self.0.writeln(w, &format!("{},", field.name))?;
+        }
+        self.0.outdent();
+        self.0.writeln(w, "})")?;
+
         self.0.outdent();
         self.0.writeln(w, "}")?;
 
@@ -242,8 +292,204 @@ impl<W: Writer> Language<W> for Rust {
         Ok(())
     }
 
-    fn gen_enum_end(&mut self, _: &ir::Schema, _: &ir::Enum, w: &mut W) -> anyhow::Result<()> {
+    fn gen_enum_end(&mut self, _: &ir::Schema, e: &ir::Enum, w: &mut W) -> anyhow::Result<()> {
         // Close enum
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // Generate impl block with encode_into and decode_from
+        self.0.writeln(
+            w,
+            &format!(
+                "impl {} {{",
+                e.name().ok_or(anyhow!("missing enum name"))?
+            ),
+        )?;
+        self.0.indent();
+
+        // Get discriminant bit count
+        let discriminant_bits = match &e.discriminant.wire {
+            ir::WireFormat::Bits { count } => *count,
+            _ => {
+                return Err(anyhow!("Enum discriminant must use Bits wire format"));
+            }
+        };
+
+        // encode_into method
+        self.0.comment(w, "Internal encoding using BitWriter.")?;
+        self.0.writeln(
+            w,
+            "fn encode_into(&self, w: &mut _baproto::BitWriter) -> Result<(), _baproto::EncodeError> {",
+        )?;
+        self.0.indent();
+
+        self.0.writeln(w, "match self {")?;
+        self.0.indent();
+
+        for variant in &e.variants {
+            match variant {
+                ir::Variant::Unit { name, index, .. } => {
+                    self.0.writeln(
+                        w,
+                        &format!("Self::{} => {{", name),
+                    )?;
+                    self.0.indent();
+                    self.0.writeln(w, &format!("w.write_bits({}, {})?;", index, discriminant_bits))?;
+                    self.0.outdent();
+                    self.0.writeln(w, "}")?;
+                }
+                ir::Variant::Field {
+                    name,
+                    index,
+                    field,
+                    ..
+                } => {
+                    self.0.writeln(
+                        w,
+                        &format!("Self::{}(v) => {{", name),
+                    )?;
+                    self.0.indent();
+                    self.0.writeln(w, &format!("w.write_bits({}, {})?;", index, discriminant_bits))?;
+
+                    // Encode the field value
+                    match &field.encoding.wire {
+                        ir::WireFormat::Bits { count } => {
+                            self.gen_encode_bits(&field.encoding.native, "v", *count, w)?;
+                        }
+                        ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                            // For variant fields, we need to handle the encoding differently
+                            match &field.encoding.native {
+                                ir::NativeType::String => {
+                                    self.0.writeln(w, "let v_bytes = v.as_bytes();")?;
+                                    self.0.writeln(w, &format!("w.write_bits(v_bytes.len() as u64, {})?;", prefix_bits))?;
+                                    self.0.writeln(w, "w.write_bytes(v_bytes)?;")?;
+                                }
+                                _ => {
+                                    return Err(anyhow!("LengthPrefixed not yet supported for enum variant fields"));
+                                }
+                            }
+                        }
+                        ir::WireFormat::Embedded => {
+                            self.gen_encode_embedded(&field.encoding.native, "v", w)?;
+                        }
+                    }
+
+                    self.0.outdent();
+                    self.0.writeln(w, "}")?;
+                }
+            }
+        }
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.writeln(w, "Ok(())")?;
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // decode_from method
+        self.0.comment(w, "Internal decoding using BitReader.")?;
+        self.0.writeln(
+            w,
+            "fn decode_from(r: &mut _baproto::BitReader) -> Result<Self, _baproto::DecodeError> {",
+        )?;
+        self.0.indent();
+
+        let enum_name = e.name().ok_or(anyhow!("missing enum name"))?;
+        self.0.writeln(w, &format!("let discriminant = r.read_bits({})?;", discriminant_bits))?;
+        self.0.writeln(w, "match discriminant {")?;
+        self.0.indent();
+
+        for variant in &e.variants {
+            match variant {
+                ir::Variant::Unit { name, index, .. } => {
+                    self.0.writeln(
+                        w,
+                        &format!("{} => Ok(Self::{}),", index, name),
+                    )?;
+                }
+                ir::Variant::Field {
+                    name,
+                    index,
+                    field,
+                    ..
+                } => {
+                    let current_pkg = e.descriptor.package.clone();
+                    self.0.writeln(w, &format!("{} => {{", index))?;
+                    self.0.indent();
+
+                    // Decode the field value
+                    let value_expr = match &field.encoding.wire {
+                        ir::WireFormat::Bits { count } => {
+                            self.gen_decode_bits(&field.encoding.native, *count, &current_pkg, w)?
+                        }
+                        ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                            self.gen_decode_length_prefixed(&field.encoding.native, *prefix_bits, &current_pkg, w)?
+                        }
+                        ir::WireFormat::Embedded => {
+                            self.gen_decode_embedded(&field.encoding.native, &current_pkg, w)?
+                        }
+                    };
+
+                    self.0.writeln(w, &format!("Ok(Self::{}({}))", name, value_expr))?;
+
+                    self.0.outdent();
+                    self.0.writeln(w, "}")?;
+                }
+            }
+        }
+
+        self.0.writeln(
+            w,
+            &format!(
+                "_ => Err(_baproto::DecodeError::InvalidDiscriminant {{ value: discriminant, type_name: \"{}\" }}),",
+                enum_name
+            ),
+        )?;
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // Generate Default impl (returns first variant)
+        let first_variant = e.variants.first().ok_or(anyhow!("enum has no variants"))?;
+        let default_variant_name = match first_variant {
+            ir::Variant::Unit { name, .. } => name.clone(),
+            ir::Variant::Field { name, .. } => name.clone(),
+        };
+
+        self.0.writeln(
+            w,
+            &format!(
+                "impl Default for {} {{",
+                e.name().ok_or(anyhow!("missing enum name"))?
+            ),
+        )?;
+        self.0.indent();
+        self.0.writeln(w, "fn default() -> Self {")?;
+        self.0.indent();
+
+        match first_variant {
+            ir::Variant::Unit { .. } => {
+                self.0.writeln(w, &format!("Self::{}", default_variant_name))?;
+            }
+            ir::Variant::Field { field, .. } => {
+                // For field variants, use the default value for the field type
+                let default_val = self.default_value(&field.encoding.native);
+                self.0.writeln(w, &format!("Self::{}({})", default_variant_name, default_val))?;
+            }
+        }
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
         self.0.outdent();
         self.0.writeln(w, "}")?;
         self.0.blank_line(w)?;
@@ -362,6 +608,798 @@ impl Rust {
             }
             ir::NativeType::Enum { descriptor } => {
                 format!("{}::default()", descriptor.name().unwrap())
+            }
+        }
+    }
+
+    /// `gen_helpers` generates the `_baproto` helper module containing BitWriter,
+    /// BitReader, error types, and transform functions.
+    fn gen_helpers<W2: Writer>(&mut self, w: &mut W2) -> anyhow::Result<()> {
+        self.0.writeln(w, "/* ----------------------------- Mod: _baproto ----------------------------- */")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "#[allow(dead_code)]")?;
+        self.0.writeln(w, "mod _baproto {")?;
+        self.0.indent();
+
+        // EncodeError
+        self.0.comment(w, "`EncodeError` represents errors during encoding.")?;
+        self.0.writeln(w, "#[derive(Debug, Clone)]")?;
+        self.0.writeln(w, "pub enum EncodeError {")?;
+        self.0.indent();
+        self.0.comment(w, "Buffer too small for encoded data.")?;
+        self.0.writeln(w, "BufferOverflow { required: usize, available: usize },")?;
+        self.0.comment(w, "Value exceeds wire format capacity.")?;
+        self.0.writeln(w, "ValueOverflow { value: u64, max_bits: u8 },")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // DecodeError
+        self.0.comment(w, "`DecodeError` represents errors during decoding.")?;
+        self.0.writeln(w, "#[derive(Debug, Clone)]")?;
+        self.0.writeln(w, "pub enum DecodeError {")?;
+        self.0.indent();
+        self.0.comment(w, "Unexpected end of buffer.")?;
+        self.0.writeln(w, "UnexpectedEof { required_bits: usize, available_bits: usize },")?;
+        self.0.comment(w, "Invalid discriminant for enum.")?;
+        self.0.writeln(w, "InvalidDiscriminant { value: u64, type_name: &'static str },")?;
+        self.0.comment(w, "String is not valid UTF-8.")?;
+        self.0.writeln(w, "InvalidUtf8,")?;
+        self.0.comment(w, "Invalid data (e.g., bool not 0 or 1).")?;
+        self.0.writeln(w, "InvalidData { message: String },")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // BitWriter
+        self.gen_bit_writer(w)?;
+
+        // BitReader
+        self.gen_bit_reader(w)?;
+
+        // Transform helpers
+        self.gen_transforms(w)?;
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        Ok(())
+    }
+
+    /// `gen_bit_writer` generates the BitWriter struct and implementation.
+    fn gen_bit_writer<W2: Writer>(&mut self, w: &mut W2) -> anyhow::Result<()> {
+        self.0.comment(w, "`BitWriter` accumulates bits into a byte buffer.")?;
+        self.0.writeln(w, "pub struct BitWriter<'a> {")?;
+        self.0.indent();
+        self.0.writeln(w, "buffer: &'a mut [u8],")?;
+        self.0.writeln(w, "byte_offset: usize,")?;
+        self.0.writeln(w, "bit_offset: u8,")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        self.0.writeln(w, "impl<'a> BitWriter<'a> {")?;
+        self.0.indent();
+
+        // new
+        self.0.comment(w, "`new` creates a new BitWriter.")?;
+        self.0.writeln(w, "pub fn new(buffer: &'a mut [u8]) -> Self {")?;
+        self.0.indent();
+        self.0.writeln(w, "Self {")?;
+        self.0.indent();
+        self.0.writeln(w, "buffer,")?;
+        self.0.writeln(w, "byte_offset: 0,")?;
+        self.0.writeln(w, "bit_offset: 0,")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // write_bits
+        self.0.comment(w, "`write_bits` writes up to 64 bits to the buffer (LSB-first, little-endian).")?;
+        self.0.writeln(w, "pub fn write_bits(&mut self, mut value: u64, mut count: u8) -> Result<(), EncodeError> {")?;
+        self.0.indent();
+        self.0.writeln(w, "if count > 64 {")?;
+        self.0.indent();
+        self.0.writeln(w, "return Err(EncodeError::ValueOverflow { value, max_bits: count });")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "while count > 0 {")?;
+        self.0.indent();
+        self.0.writeln(w, "if self.byte_offset >= self.buffer.len() {")?;
+        self.0.indent();
+        self.0.writeln(w, "return Err(EncodeError::BufferOverflow {")?;
+        self.0.indent();
+        self.0.writeln(w, "required: self.byte_offset + 1,")?;
+        self.0.writeln(w, "available: self.buffer.len(),")?;
+        self.0.outdent();
+        self.0.writeln(w, "});")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "let bits_in_byte = 8 - self.bit_offset;")?;
+        self.0.writeln(w, "let bits_to_write = count.min(bits_in_byte);")?;
+        self.0.writeln(w, "let mask = (1u64 << bits_to_write) - 1;")?;
+        self.0.writeln(w, "let bits = (value & mask) as u8;")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "self.buffer[self.byte_offset] |= bits << self.bit_offset;")?;
+        self.0.writeln(w, "self.bit_offset += bits_to_write;")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "if self.bit_offset >= 8 {")?;
+        self.0.indent();
+        self.0.writeln(w, "self.byte_offset += 1;")?;
+        self.0.writeln(w, "self.bit_offset = 0;")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "value >>= bits_to_write;")?;
+        self.0.writeln(w, "count -= bits_to_write;")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "Ok(())")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // write_bytes
+        self.0.comment(w, "`write_bytes` writes aligned bytes to the buffer.")?;
+        self.0.writeln(w, "pub fn write_bytes(&mut self, data: &[u8]) -> Result<(), EncodeError> {")?;
+        self.0.indent();
+        self.0.writeln(w, "for byte in data {")?;
+        self.0.indent();
+        self.0.writeln(w, "self.write_bits(*byte as u64, 8)?;")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.writeln(w, "Ok(())")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // pad
+        self.0.comment(w, "`pad` writes N zero bits.")?;
+        self.0.writeln(w, "pub fn pad(&mut self, bits: u64) -> Result<(), EncodeError> {")?;
+        self.0.indent();
+        self.0.writeln(w, "let mut remaining = bits;")?;
+        self.0.writeln(w, "while remaining > 0 {")?;
+        self.0.indent();
+        self.0.writeln(w, "let chunk = remaining.min(64) as u8;")?;
+        self.0.writeln(w, "self.write_bits(0, chunk)?;")?;
+        self.0.writeln(w, "remaining -= chunk as u64;")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.writeln(w, "Ok(())")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // finish
+        self.0.comment(w, "`finish` returns the total bytes written.")?;
+        self.0.writeln(w, "pub fn finish(self) -> usize {")?;
+        self.0.indent();
+        self.0.writeln(w, "if self.bit_offset > 0 {")?;
+        self.0.indent();
+        self.0.writeln(w, "self.byte_offset + 1")?;
+        self.0.outdent();
+        self.0.writeln(w, "} else {")?;
+        self.0.indent();
+        self.0.writeln(w, "self.byte_offset")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        Ok(())
+    }
+
+    /// `gen_bit_reader` generates the BitReader struct and implementation.
+    fn gen_bit_reader<W2: Writer>(&mut self, w: &mut W2) -> anyhow::Result<()> {
+        self.0.comment(w, "`BitReader` reads bits from a byte buffer.")?;
+        self.0.writeln(w, "pub struct BitReader<'a> {")?;
+        self.0.indent();
+        self.0.writeln(w, "buffer: &'a [u8],")?;
+        self.0.writeln(w, "byte_offset: usize,")?;
+        self.0.writeln(w, "bit_offset: u8,")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        self.0.writeln(w, "impl<'a> BitReader<'a> {")?;
+        self.0.indent();
+
+        // new
+        self.0.comment(w, "`new` creates a new BitReader.")?;
+        self.0.writeln(w, "pub fn new(buffer: &'a [u8]) -> Self {")?;
+        self.0.indent();
+        self.0.writeln(w, "Self {")?;
+        self.0.indent();
+        self.0.writeln(w, "buffer,")?;
+        self.0.writeln(w, "byte_offset: 0,")?;
+        self.0.writeln(w, "bit_offset: 0,")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // read_bits
+        self.0.comment(w, "`read_bits` reads up to 64 bits from the buffer (LSB-first, little-endian).")?;
+        self.0.writeln(w, "pub fn read_bits(&mut self, mut count: u8) -> Result<u64, DecodeError> {")?;
+        self.0.indent();
+        self.0.writeln(w, "if count > 64 {")?;
+        self.0.indent();
+        self.0.writeln(w, "return Err(DecodeError::InvalidData {")?;
+        self.0.indent();
+        self.0.writeln(w, "message: format!(\"Cannot read more than 64 bits at once, requested {}\", count),")?;
+        self.0.outdent();
+        self.0.writeln(w, "});")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "let mut result = 0u64;")?;
+        self.0.writeln(w, "let mut bits_read = 0u8;")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "while count > 0 {")?;
+        self.0.indent();
+        self.0.writeln(w, "if self.byte_offset >= self.buffer.len() {")?;
+        self.0.indent();
+        self.0.writeln(w, "return Err(DecodeError::UnexpectedEof {")?;
+        self.0.indent();
+        self.0.writeln(w, "required_bits: count as usize,")?;
+        self.0.writeln(w, "available_bits: 0,")?;
+        self.0.outdent();
+        self.0.writeln(w, "});")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "let bits_in_byte = 8 - self.bit_offset;")?;
+        self.0.writeln(w, "let bits_to_read = count.min(bits_in_byte);")?;
+        self.0.writeln(w, "let mask = (1u8 << bits_to_read) - 1;")?;
+        self.0.writeln(w, "let bits = (self.buffer[self.byte_offset] >> self.bit_offset) & mask;")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "result |= (bits as u64) << bits_read;")?;
+        self.0.writeln(w, "bits_read += bits_to_read;")?;
+        self.0.writeln(w, "self.bit_offset += bits_to_read;")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "if self.bit_offset >= 8 {")?;
+        self.0.indent();
+        self.0.writeln(w, "self.byte_offset += 1;")?;
+        self.0.writeln(w, "self.bit_offset = 0;")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "count -= bits_to_read;")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+        self.0.writeln(w, "Ok(result)")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // read_bytes
+        self.0.comment(w, "`read_bytes` reads aligned bytes from the buffer.")?;
+        self.0.writeln(w, "pub fn read_bytes(&mut self, len: usize) -> Result<Vec<u8>, DecodeError> {")?;
+        self.0.indent();
+        self.0.writeln(w, "let mut result = Vec::with_capacity(len);")?;
+        self.0.writeln(w, "for _ in 0..len {")?;
+        self.0.indent();
+        self.0.writeln(w, "result.push(self.read_bits(8)? as u8);")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.writeln(w, "Ok(result)")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // skip
+        self.0.comment(w, "`skip` skips N bits (for padding).")?;
+        self.0.writeln(w, "pub fn skip(&mut self, bits: u64) -> Result<(), DecodeError> {")?;
+        self.0.indent();
+        self.0.writeln(w, "let mut remaining = bits;")?;
+        self.0.writeln(w, "while remaining > 0 {")?;
+        self.0.indent();
+        self.0.writeln(w, "let chunk = remaining.min(64) as u8;")?;
+        self.0.writeln(w, "self.read_bits(chunk)?;")?;
+        self.0.writeln(w, "remaining -= chunk as u64;")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.writeln(w, "Ok(())")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // bytes_consumed
+        self.0.comment(w, "`bytes_consumed` returns the total bytes consumed.")?;
+        self.0.writeln(w, "pub fn bytes_consumed(&self) -> usize {")?;
+        self.0.indent();
+        self.0.writeln(w, "if self.bit_offset > 0 {")?;
+        self.0.indent();
+        self.0.writeln(w, "self.byte_offset + 1")?;
+        self.0.outdent();
+        self.0.writeln(w, "} else {")?;
+        self.0.indent();
+        self.0.writeln(w, "self.byte_offset")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        Ok(())
+    }
+
+    /// `gen_transforms` generates transform helper functions.
+    fn gen_transforms<W2: Writer>(&mut self, w: &mut W2) -> anyhow::Result<()> {
+        // zigzag_encode
+        self.0.comment(w, "`zigzag_encode` encodes a signed integer using ZigZag encoding.")?;
+        self.0.writeln(w, "pub fn zigzag_encode(value: i64) -> u64 {")?;
+        self.0.indent();
+        self.0.writeln(w, "((value << 1) ^ (value >> 63)) as u64")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // zigzag_decode
+        self.0.comment(w, "`zigzag_decode` decodes a ZigZag-encoded signed integer.")?;
+        self.0.writeln(w, "pub fn zigzag_decode(value: u64) -> i64 {")?;
+        self.0.indent();
+        self.0.writeln(w, "((value >> 1) as i64) ^ (-((value & 1) as i64))")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // fixed_point_encode
+        self.0.comment(w, "`fixed_point_encode` converts a float to fixed-point representation.")?;
+        self.0.writeln(w, "pub fn fixed_point_encode(value: f64, fractional_bits: u8) -> i64 {")?;
+        self.0.indent();
+        self.0.writeln(w, "(value * (1u64 << fractional_bits) as f64).round() as i64")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+        self.0.blank_line(w)?;
+
+        // fixed_point_decode
+        self.0.comment(w, "`fixed_point_decode` converts fixed-point to float representation.")?;
+        self.0.writeln(w, "pub fn fixed_point_decode(value: i64, fractional_bits: u8) -> f64 {")?;
+        self.0.indent();
+        self.0.writeln(w, "(value as f64) / (1u64 << fractional_bits) as f64")?;
+        self.0.outdent();
+        self.0.writeln(w, "}")?;
+
+        Ok(())
+    }
+
+    /// `gen_field_encode` generates encoding code for a single field.
+    fn gen_field_encode<W2: Writer>(
+        &mut self,
+        field: &ir::Field,
+        _current_pkg: &PackageName,
+        w: &mut W2,
+    ) -> anyhow::Result<()> {
+        let field_name = &field.name;
+        let encoding = &field.encoding;
+
+        // Apply transforms first (if any)
+        let mut value_expr = format!("self.{}", field_name);
+
+        // Apply transforms in order
+        for transform in &encoding.transforms {
+            value_expr = match transform {
+                ir::Transform::ZigZag => {
+                    format!("_baproto::zigzag_encode({} as i64)", value_expr)
+                }
+                ir::Transform::Delta => {
+                    // For stateless v1, delta is a no-op
+                    value_expr
+                }
+                ir::Transform::FixedPoint {
+                    fractional_bits, ..
+                } => {
+                    format!(
+                        "_baproto::fixed_point_encode({} as f64, {})",
+                        value_expr, fractional_bits
+                    )
+                }
+            };
+        }
+
+        // Generate encoding based on wire format
+        match &encoding.wire {
+            ir::WireFormat::Bits { count } => {
+                self.gen_encode_bits(&encoding.native, &value_expr, *count, w)?;
+            }
+            ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                self.gen_encode_length_prefixed(&encoding.native, field_name, *prefix_bits, w)?;
+            }
+            ir::WireFormat::Embedded => {
+                self.gen_encode_embedded(&encoding.native, field_name, w)?;
+            }
+        }
+
+        // Handle padding
+        if let Some(padding_bits) = encoding.padding_bits {
+            self.0.writeln(w, &format!("w.pad({})?;", padding_bits))?;
+        }
+
+        Ok(())
+    }
+
+    /// `gen_field_decode` generates decoding code for a single field.
+    fn gen_field_decode<W2: Writer>(
+        &mut self,
+        field: &ir::Field,
+        current_pkg: &PackageName,
+        w: &mut W2,
+    ) -> anyhow::Result<()> {
+        let field_name = &field.name;
+        let encoding = &field.encoding;
+
+        // Generate decoding based on wire format
+        let decoded_expr = match &encoding.wire {
+            ir::WireFormat::Bits { count } => {
+                self.gen_decode_bits(&encoding.native, *count, current_pkg, w)?
+            }
+            ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                self.gen_decode_length_prefixed(&encoding.native, *prefix_bits, current_pkg, w)?
+            }
+            ir::WireFormat::Embedded => {
+                self.gen_decode_embedded(&encoding.native, current_pkg, w)?
+            }
+        };
+
+        // Apply reverse transforms
+        let mut value_expr = decoded_expr;
+        for transform in encoding.transforms.iter().rev() {
+            value_expr = match transform {
+                ir::Transform::ZigZag => {
+                    format!("_baproto::zigzag_decode({})", value_expr)
+                }
+                ir::Transform::Delta => {
+                    // For stateless v1, delta is a no-op
+                    value_expr
+                }
+                ir::Transform::FixedPoint {
+                    fractional_bits, ..
+                } => {
+                    format!(
+                        "_baproto::fixed_point_decode({}, {})",
+                        value_expr, fractional_bits
+                    )
+                }
+            };
+        }
+
+        // Declare the field variable
+        self.0.writeln(w, &format!("let {} = {};", field_name, value_expr))?;
+
+        // Handle padding
+        if let Some(padding_bits) = encoding.padding_bits {
+            self.0.writeln(w, &format!("r.skip({})?;", padding_bits))?;
+        }
+
+        Ok(())
+    }
+
+    /// `gen_encode_bits` generates code to encode a value with fixed bit width.
+    fn gen_encode_bits<W2: Writer>(
+        &mut self,
+        native: &ir::NativeType,
+        value_expr: &str,
+        bits: u64,
+        w: &mut W2,
+    ) -> anyhow::Result<()> {
+        match native {
+            ir::NativeType::Bool => {
+                self.0.writeln(w, &format!("w.write_bits({} as u64, 1)?;", value_expr))?;
+            }
+            ir::NativeType::Int { .. } => {
+                self.0.writeln(w, &format!("w.write_bits({} as u64, {})?;", value_expr, bits))?;
+            }
+            ir::NativeType::Float { bits: float_bits } => {
+                let to_bits_fn = if *float_bits == 32 {
+                    "to_bits"
+                } else {
+                    "to_bits"
+                };
+                self.0.writeln(
+                    w,
+                    &format!("w.write_bits({}.{}() as u64, {})?;", value_expr, to_bits_fn, bits),
+                )?;
+            }
+            _ => {
+                return Err(anyhow!("Bits wire format not supported for {:?}", native));
+            }
+        }
+        Ok(())
+    }
+
+    /// `gen_decode_bits` generates code to decode a value with fixed bit width.
+    fn gen_decode_bits<W2: Writer>(
+        &mut self,
+        native: &ir::NativeType,
+        bits: u64,
+        current_pkg: &PackageName,
+        w: &mut W2,
+    ) -> anyhow::Result<String> {
+        let rust_type = self.type_name(native, current_pkg);
+
+        let expr = match native {
+            ir::NativeType::Bool => {
+                self.0.writeln(w, &format!("let _bits = r.read_bits(1)?;"))?;
+                "_bits != 0".to_string()
+            }
+            ir::NativeType::Int { .. } => {
+                format!("r.read_bits({})? as {}", bits, rust_type)
+            }
+            ir::NativeType::Float { bits: float_bits } => {
+                let from_bits_fn = if *float_bits == 32 {
+                    "f32::from_bits"
+                } else {
+                    "f64::from_bits"
+                };
+                format!("{}(r.read_bits({})? as u{})", from_bits_fn, bits, float_bits)
+            }
+            _ => {
+                return Err(anyhow!("Bits wire format not supported for {:?}", native));
+            }
+        };
+
+        Ok(expr)
+    }
+
+    /// `gen_encode_length_prefixed` generates code for length-prefixed encoding.
+    fn gen_encode_length_prefixed<W2: Writer>(
+        &mut self,
+        native: &ir::NativeType,
+        field_name: &str,
+        prefix_bits: u8,
+        w: &mut W2,
+    ) -> anyhow::Result<()> {
+        match native {
+            ir::NativeType::Int { .. } => {
+                // Variable-length integer encoding
+                self.0.writeln(w, &format!("let {}_bits = if self.{} == 0 {{ 1 }} else {{ 64 - self.{}.leading_zeros() }} as u8;", field_name, field_name, field_name))?;
+                self.0.writeln(w, &format!("w.write_bits({}_bits as u64, {})?;", field_name, prefix_bits))?;
+                self.0.writeln(w, &format!("w.write_bits(self.{} as u64, {}_bits)?;", field_name, field_name))?;
+            }
+            ir::NativeType::String => {
+                self.0.writeln(w, &format!("let {}_bytes = self.{}.as_bytes();", field_name, field_name))?;
+                self.0.writeln(w, &format!("w.write_bits({}_bytes.len() as u64, {})?;", field_name, prefix_bits))?;
+                self.0.writeln(w, &format!("w.write_bytes({}_bytes)?;", field_name))?;
+            }
+            ir::NativeType::Bytes => {
+                self.0.writeln(w, &format!("w.write_bits(self.{}.len() as u64, {})?;", field_name, prefix_bits))?;
+                self.0.writeln(w, &format!("w.write_bytes(&self.{})?;", field_name))?;
+            }
+            ir::NativeType::Array { element } => {
+                self.0.writeln(w, &format!("w.write_bits(self.{}.len() as u64, {})?;", field_name, prefix_bits))?;
+                self.0.writeln(w, &format!("for item in &self.{} {{", field_name))?;
+                self.0.indent();
+
+                // Encode each element
+                match &element.wire {
+                    ir::WireFormat::Bits { count } => {
+                        self.gen_encode_bits(&element.native, "item", *count, w)?;
+                    }
+                    ir::WireFormat::LengthPrefixed { prefix_bits: elem_prefix_bits } => {
+                        // Nested length-prefixed (e.g., array of strings)
+                        match &element.native {
+                            ir::NativeType::String => {
+                                self.0.writeln(w, "let item_bytes = item.as_bytes();")?;
+                                self.0.writeln(w, &format!("w.write_bits(item_bytes.len() as u64, {})?;", elem_prefix_bits))?;
+                                self.0.writeln(w, "w.write_bytes(item_bytes)?;")?;
+                            }
+                            ir::NativeType::Bytes => {
+                                self.0.writeln(w, &format!("w.write_bits(item.len() as u64, {})?;", elem_prefix_bits))?;
+                                self.0.writeln(w, "w.write_bytes(item)?;")?;
+                            }
+                            _ => {
+                                return Err(anyhow!("Nested length-prefixed types not yet fully supported"));
+                            }
+                        }
+                    }
+                    ir::WireFormat::Embedded => {
+                        self.gen_encode_embedded(&element.native, "item", w)?;
+                    }
+                }
+
+                self.0.outdent();
+                self.0.writeln(w, "}")?;
+            }
+            ir::NativeType::Map { key, value } => {
+                self.0.writeln(w, &format!("w.write_bits(self.{}.len() as u64, {})?;", field_name, prefix_bits))?;
+                self.0.writeln(w, &format!("for (k, v) in &self.{} {{", field_name))?;
+                self.0.indent();
+
+                // Encode key
+                match &key.wire {
+                    ir::WireFormat::Bits { count } => {
+                        self.gen_encode_bits(&key.native, "k", *count, w)?;
+                    }
+                    ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                        self.gen_encode_length_prefixed(&key.native, "k", *prefix_bits, w)?;
+                    }
+                    ir::WireFormat::Embedded => {
+                        self.gen_encode_embedded(&key.native, "k", w)?;
+                    }
+                }
+
+                // Encode value
+                match &value.wire {
+                    ir::WireFormat::Bits { count } => {
+                        self.gen_encode_bits(&value.native, "v", *count, w)?;
+                    }
+                    ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                        self.gen_encode_length_prefixed(&value.native, "v", *prefix_bits, w)?;
+                    }
+                    ir::WireFormat::Embedded => {
+                        self.gen_encode_embedded(&value.native, "v", w)?;
+                    }
+                }
+
+                self.0.outdent();
+                self.0.writeln(w, "}")?;
+            }
+            _ => {
+                return Err(anyhow!("LengthPrefixed wire format not supported for {:?}", native));
+            }
+        }
+        Ok(())
+    }
+
+    /// `gen_decode_length_prefixed` generates code for length-prefixed decoding.
+    fn gen_decode_length_prefixed<W2: Writer>(
+        &mut self,
+        native: &ir::NativeType,
+        prefix_bits: u8,
+        current_pkg: &PackageName,
+        w: &mut W2,
+    ) -> anyhow::Result<String> {
+        match native {
+            ir::NativeType::Int { .. } => {
+                // Variable-length integer decoding
+                let rust_type = self.type_name(native, current_pkg);
+                self.0.writeln(w, &format!("let _var_bits = r.read_bits({})? as u8;", prefix_bits))?;
+                Ok(format!("r.read_bits(_var_bits)? as {}", rust_type))
+            }
+            ir::NativeType::String => {
+                self.0.writeln(w, &format!("let _len = r.read_bits({})? as usize;", prefix_bits))?;
+                self.0.writeln(w, "let _bytes = r.read_bytes(_len)?;")?;
+                self.0.writeln(w, "let _str = String::from_utf8(_bytes).map_err(|_| _baproto::DecodeError::InvalidUtf8)?;")?;
+                Ok("_str".to_string())
+            }
+            ir::NativeType::Bytes => {
+                self.0.writeln(w, &format!("let _len = r.read_bits({})? as usize;", prefix_bits))?;
+                Ok("r.read_bytes(_len)?".to_string())
+            }
+            ir::NativeType::Array { element } => {
+                self.0.writeln(w, &format!("let _count = r.read_bits({})? as usize;", prefix_bits))?;
+                self.0.writeln(w, "let mut _vec = Vec::with_capacity(_count);")?;
+                self.0.writeln(w, "for _ in 0.._count {")?;
+                self.0.indent();
+
+                // Decode each element
+                let elem_expr = match &element.wire {
+                    ir::WireFormat::Bits { count } => {
+                        self.gen_decode_bits(&element.native, *count, current_pkg, w)?
+                    }
+                    ir::WireFormat::LengthPrefixed { prefix_bits: elem_prefix_bits } => {
+                        // Nested length-prefixed (e.g., array of strings)
+                        match &element.native {
+                            ir::NativeType::String => {
+                                self.0.writeln(w, &format!("let _item_len = r.read_bits({})? as usize;", elem_prefix_bits))?;
+                                self.0.writeln(w, "let _item_bytes = r.read_bytes(_item_len)?;")?;
+                                self.0.writeln(w, "let _item_str = String::from_utf8(_item_bytes).map_err(|_| _baproto::DecodeError::InvalidUtf8)?;")?;
+                                "_item_str".to_string()
+                            }
+                            ir::NativeType::Bytes => {
+                                self.0.writeln(w, &format!("let _item_len = r.read_bits({})? as usize;", elem_prefix_bits))?;
+                                "r.read_bytes(_item_len)?".to_string()
+                            }
+                            _ => {
+                                return Err(anyhow!("Nested length-prefixed types not yet fully supported"));
+                            }
+                        }
+                    }
+                    ir::WireFormat::Embedded => {
+                        self.gen_decode_embedded(&element.native, current_pkg, w)?
+                    }
+                };
+
+                self.0.writeln(w, &format!("_vec.push({});", elem_expr))?;
+
+                self.0.outdent();
+                self.0.writeln(w, "}")?;
+                Ok("_vec".to_string())
+            }
+            ir::NativeType::Map { key, value } => {
+                self.0.writeln(w, &format!("let _count = r.read_bits({})? as usize;", prefix_bits))?;
+                self.0.writeln(w, "let mut _map = HashMap::with_capacity(_count);")?;
+                self.0.writeln(w, "for _ in 0.._count {")?;
+                self.0.indent();
+
+                // Decode key
+                let key_expr = match &key.wire {
+                    ir::WireFormat::Bits { count } => {
+                        self.gen_decode_bits(&key.native, *count, current_pkg, w)?
+                    }
+                    ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                        self.gen_decode_length_prefixed(&key.native, *prefix_bits, current_pkg, w)?
+                    }
+                    ir::WireFormat::Embedded => {
+                        self.gen_decode_embedded(&key.native, current_pkg, w)?
+                    }
+                };
+                self.0.writeln(w, &format!("let _k = {};", key_expr))?;
+
+                // Decode value
+                let value_expr = match &value.wire {
+                    ir::WireFormat::Bits { count } => {
+                        self.gen_decode_bits(&value.native, *count, current_pkg, w)?
+                    }
+                    ir::WireFormat::LengthPrefixed { prefix_bits } => {
+                        self.gen_decode_length_prefixed(&value.native, *prefix_bits, current_pkg, w)?
+                    }
+                    ir::WireFormat::Embedded => {
+                        self.gen_decode_embedded(&value.native, current_pkg, w)?
+                    }
+                };
+                self.0.writeln(w, &format!("let _v = {};", value_expr))?;
+
+                self.0.writeln(w, "_map.insert(_k, _v);")?;
+
+                self.0.outdent();
+                self.0.writeln(w, "}")?;
+                Ok("_map".to_string())
+            }
+            _ => {
+                Err(anyhow!("LengthPrefixed wire format not supported for {:?}", native))
+            }
+        }
+    }
+
+    /// `gen_encode_embedded` generates code for embedded type encoding.
+    fn gen_encode_embedded<W2: Writer>(
+        &mut self,
+        native: &ir::NativeType,
+        value_expr: &str,
+        w: &mut W2,
+    ) -> anyhow::Result<()> {
+        match native {
+            ir::NativeType::Message { .. } | ir::NativeType::Enum { .. } => {
+                self.0.writeln(w, &format!("{}.encode_into(w)?;", value_expr))?;
+            }
+            _ => {
+                return Err(anyhow!("Embedded wire format only for messages and enums"));
+            }
+        }
+        Ok(())
+    }
+
+    /// `gen_decode_embedded` generates code for embedded type decoding.
+    fn gen_decode_embedded<W2: Writer>(
+        &mut self,
+        native: &ir::NativeType,
+        current_pkg: &PackageName,
+        _w: &mut W2,
+    ) -> anyhow::Result<String> {
+        match native {
+            ir::NativeType::Message { descriptor } | ir::NativeType::Enum { descriptor } => {
+                let type_name = self.descriptor_to_rust_type(descriptor, current_pkg);
+                Ok(format!("{}::decode_from(r)?", type_name))
+            }
+            _ => {
+                Err(anyhow!("Embedded wire format only for messages and enums"))
             }
         }
     }

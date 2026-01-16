@@ -4,7 +4,219 @@
 //! Do not edit manually.
 
 use std::collections::HashMap;
-use std::io::{Read, Write};
+
+/* ----------------------------- Mod: _baproto ----------------------------- */
+
+#[allow(dead_code)]
+mod _baproto {
+    /// `EncodeError` represents errors during encoding.
+    #[derive(Debug, Clone)]
+    pub enum EncodeError {
+        /// Buffer too small for encoded data.
+        BufferOverflow { required: usize, available: usize },
+        /// Value exceeds wire format capacity.
+        ValueOverflow { value: u64, max_bits: u8 },
+    }
+
+    /// `DecodeError` represents errors during decoding.
+    #[derive(Debug, Clone)]
+    pub enum DecodeError {
+        /// Unexpected end of buffer.
+        UnexpectedEof { required_bits: usize, available_bits: usize },
+        /// Invalid discriminant for enum.
+        InvalidDiscriminant { value: u64, type_name: &'static str },
+        /// String is not valid UTF-8.
+        InvalidUtf8,
+        /// Invalid data (e.g., bool not 0 or 1).
+        InvalidData { message: String },
+    }
+
+    /// `BitWriter` accumulates bits into a byte buffer.
+    pub struct BitWriter<'a> {
+        buffer: &'a mut [u8],
+        byte_offset: usize,
+        bit_offset: u8,
+    }
+
+    impl<'a> BitWriter<'a> {
+        /// `new` creates a new BitWriter.
+        pub fn new(buffer: &'a mut [u8]) -> Self {
+            Self {
+                buffer,
+                byte_offset: 0,
+                bit_offset: 0,
+            }
+        }
+
+        /// `write_bits` writes up to 64 bits to the buffer (LSB-first, little-endian).
+        pub fn write_bits(&mut self, mut value: u64, mut count: u8) -> Result<(), EncodeError> {
+            if count > 64 {
+                return Err(EncodeError::ValueOverflow { value, max_bits: count });
+            }
+
+            while count > 0 {
+                if self.byte_offset >= self.buffer.len() {
+                    return Err(EncodeError::BufferOverflow {
+                        required: self.byte_offset + 1,
+                        available: self.buffer.len(),
+                    });
+                }
+
+                let bits_in_byte = 8 - self.bit_offset;
+                let bits_to_write = count.min(bits_in_byte);
+                let mask = (1u64 << bits_to_write) - 1;
+                let bits = (value & mask) as u8;
+
+                self.buffer[self.byte_offset] |= bits << self.bit_offset;
+                self.bit_offset += bits_to_write;
+
+                if self.bit_offset >= 8 {
+                    self.byte_offset += 1;
+                    self.bit_offset = 0;
+                }
+
+                value >>= bits_to_write;
+                count -= bits_to_write;
+            }
+
+            Ok(())
+        }
+
+        /// `write_bytes` writes aligned bytes to the buffer.
+        pub fn write_bytes(&mut self, data: &[u8]) -> Result<(), EncodeError> {
+            for byte in data {
+                self.write_bits(*byte as u64, 8)?;
+            }
+            Ok(())
+        }
+
+        /// `pad` writes N zero bits.
+        pub fn pad(&mut self, bits: u64) -> Result<(), EncodeError> {
+            let mut remaining = bits;
+            while remaining > 0 {
+                let chunk = remaining.min(64) as u8;
+                self.write_bits(0, chunk)?;
+                remaining -= chunk as u64;
+            }
+            Ok(())
+        }
+
+        /// `finish` returns the total bytes written.
+        pub fn finish(self) -> usize {
+            if self.bit_offset > 0 {
+                self.byte_offset + 1
+            } else {
+                self.byte_offset
+            }
+        }
+    }
+
+    /// `BitReader` reads bits from a byte buffer.
+    pub struct BitReader<'a> {
+        buffer: &'a [u8],
+        byte_offset: usize,
+        bit_offset: u8,
+    }
+
+    impl<'a> BitReader<'a> {
+        /// `new` creates a new BitReader.
+        pub fn new(buffer: &'a [u8]) -> Self {
+            Self {
+                buffer,
+                byte_offset: 0,
+                bit_offset: 0,
+            }
+        }
+
+        /// `read_bits` reads up to 64 bits from the buffer (LSB-first, little-endian).
+        pub fn read_bits(&mut self, mut count: u8) -> Result<u64, DecodeError> {
+            if count > 64 {
+                return Err(DecodeError::InvalidData {
+                    message: format!("Cannot read more than 64 bits at once, requested {}", count),
+                });
+            }
+
+            let mut result = 0u64;
+            let mut bits_read = 0u8;
+
+            while count > 0 {
+                if self.byte_offset >= self.buffer.len() {
+                    return Err(DecodeError::UnexpectedEof {
+                        required_bits: count as usize,
+                        available_bits: 0,
+                    });
+                }
+
+                let bits_in_byte = 8 - self.bit_offset;
+                let bits_to_read = count.min(bits_in_byte);
+                let mask = (1u8 << bits_to_read) - 1;
+                let bits = (self.buffer[self.byte_offset] >> self.bit_offset) & mask;
+
+                result |= (bits as u64) << bits_read;
+                bits_read += bits_to_read;
+                self.bit_offset += bits_to_read;
+
+                if self.bit_offset >= 8 {
+                    self.byte_offset += 1;
+                    self.bit_offset = 0;
+                }
+
+                count -= bits_to_read;
+            }
+
+            Ok(result)
+        }
+
+        /// `read_bytes` reads aligned bytes from the buffer.
+        pub fn read_bytes(&mut self, len: usize) -> Result<Vec<u8>, DecodeError> {
+            let mut result = Vec::with_capacity(len);
+            for _ in 0..len {
+                result.push(self.read_bits(8)? as u8);
+            }
+            Ok(result)
+        }
+
+        /// `skip` skips N bits (for padding).
+        pub fn skip(&mut self, bits: u64) -> Result<(), DecodeError> {
+            let mut remaining = bits;
+            while remaining > 0 {
+                let chunk = remaining.min(64) as u8;
+                self.read_bits(chunk)?;
+                remaining -= chunk as u64;
+            }
+            Ok(())
+        }
+
+        /// `bytes_consumed` returns the total bytes consumed.
+        pub fn bytes_consumed(&self) -> usize {
+            if self.bit_offset > 0 {
+                self.byte_offset + 1
+            } else {
+                self.byte_offset
+            }
+        }
+    }
+
+    /// `zigzag_encode` encodes a signed integer using ZigZag encoding.
+    pub fn zigzag_encode(value: i64) -> u64 {
+        ((value << 1) ^ (value >> 63)) as u64
+    }
+
+    /// `zigzag_decode` decodes a ZigZag-encoded signed integer.
+    pub fn zigzag_decode(value: u64) -> i64 {
+        ((value >> 1) as i64) ^ (-((value & 1) as i64))
+    }
+
+    /// `fixed_point_encode` converts a float to fixed-point representation.
+    pub fn fixed_point_encode(value: f64, fractional_bits: u8) -> i64 {
+        (value * (1u64 << fractional_bits) as f64).round() as i64
+    }
+
+    /// `fixed_point_decode` converts fixed-point to float representation.
+    pub fn fixed_point_decode(value: i64, fractional_bits: u8) -> f64 {
+        (value as f64) / (1u64 << fractional_bits) as f64
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Container {
@@ -27,14 +239,106 @@ impl Container {
         }
     }
 
-    /// Encodes this message to a writer.
-    pub fn encode(&self, _writer: &mut [u8]) -> std::io::Result<()> {
-        todo!("serialization not yet implemented")
+    /// Encodes this message to a buffer, returning bytes written.
+    pub fn encode(&self, buffer: &mut [u8]) -> Result<usize, _baproto::EncodeError> {
+        buffer.fill(0);
+        let mut writer = _baproto::BitWriter::new(buffer);
+        self.encode_into(&mut writer)?;
+        Ok(writer.finish())
     }
 
-    /// Decodes a message from a reader.
-    pub fn decode(_reader: &[u8]) -> std::io::Result<Self> {
-        todo!("deserialization not yet implemented")
+    /// Decodes a message from a buffer, returning (message, bytes consumed).
+    pub fn decode(buffer: &[u8]) -> Result<(Self, usize), _baproto::DecodeError> {
+        let mut reader = _baproto::BitReader::new(buffer);
+        let msg = Self::decode_from(&mut reader)?;
+        Ok((msg, reader.bytes_consumed()))
+    }
+
+    /// Internal encoding using BitWriter.
+    fn encode_into(&self, w: &mut _baproto::BitWriter) -> Result<(), _baproto::EncodeError> {
+        w.write_bits(self.numbers.len() as u64, 32)?;
+        for item in &self.numbers {
+            w.write_bits(item as u64, 32)?;
+        }
+        w.write_bits(self.names.len() as u64, 32)?;
+        for item in &self.names {
+            let item_bytes = item.as_bytes();
+            w.write_bits(item_bytes.len() as u64, 32)?;
+            w.write_bytes(item_bytes)?;
+        }
+        w.write_bits(self.fixed_size.len() as u64, 32)?;
+        for item in &self.fixed_size {
+            w.write_bits(item as u64, 32)?;
+        }
+        w.write_bits(self.counts.len() as u64, 32)?;
+        for (k, v) in &self.counts {
+            let k_bytes = self.k.as_bytes();
+            w.write_bits(k_bytes.len() as u64, 32)?;
+            w.write_bytes(k_bytes)?;
+            w.write_bits(v as u64, 32)?;
+        }
+        w.write_bits(self.reverse.len() as u64, 32)?;
+        for (k, v) in &self.reverse {
+            w.write_bits(k as u64, 32)?;
+            let v_bytes = self.v.as_bytes();
+            w.write_bits(v_bytes.len() as u64, 32)?;
+            w.write_bytes(v_bytes)?;
+        }
+        Ok(())
+    }
+
+    /// Internal decoding using BitReader.
+    fn decode_from(r: &mut _baproto::BitReader) -> Result<Self, _baproto::DecodeError> {
+        let _count = r.read_bits(32)? as usize;
+        let mut _vec = Vec::with_capacity(_count);
+        for _ in 0.._count {
+            _vec.push(r.read_bits(32)? as u32);
+        }
+        let numbers = _vec;
+        let _count = r.read_bits(32)? as usize;
+        let mut _vec = Vec::with_capacity(_count);
+        for _ in 0.._count {
+            let _item_len = r.read_bits(32)? as usize;
+            let _item_bytes = r.read_bytes(_item_len)?;
+            let _item_str = String::from_utf8(_item_bytes).map_err(|_| _baproto::DecodeError::InvalidUtf8)?;
+            _vec.push(_item_str);
+        }
+        let names = _vec;
+        let _count = r.read_bits(32)? as usize;
+        let mut _vec = Vec::with_capacity(_count);
+        for _ in 0.._count {
+            _vec.push(r.read_bits(32)? as u32);
+        }
+        let fixed_size = _vec;
+        let _count = r.read_bits(32)? as usize;
+        let mut _map = HashMap::with_capacity(_count);
+        for _ in 0.._count {
+            let _len = r.read_bits(32)? as usize;
+            let _bytes = r.read_bytes(_len)?;
+            let _str = String::from_utf8(_bytes).map_err(|_| _baproto::DecodeError::InvalidUtf8)?;
+            let _k = _str;
+            let _v = r.read_bits(32)? as u32;
+            _map.insert(_k, _v);
+        }
+        let counts = _map;
+        let _count = r.read_bits(32)? as usize;
+        let mut _map = HashMap::with_capacity(_count);
+        for _ in 0.._count {
+            let _k = r.read_bits(32)? as u32;
+            let _len = r.read_bits(32)? as usize;
+            let _bytes = r.read_bytes(_len)?;
+            let _str = String::from_utf8(_bytes).map_err(|_| _baproto::DecodeError::InvalidUtf8)?;
+            let _v = _str;
+            _map.insert(_k, _v);
+        }
+        let reverse = _map;
+        Ok(Self {
+            numbers,
+            names,
+            fixed_size,
+            counts,
+            reverse,
+        })
     }
 }
 
