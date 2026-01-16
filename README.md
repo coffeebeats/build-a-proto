@@ -36,6 +36,14 @@ The following instructions outline how to get the project set up for local devel
 2. Clone the [coffeebeats/build-a-proto](https://github.com/coffeebeats/build-a-proto) repository.
 3. Install the tools [used below](#code-submission) by following each of their specific installation instructions.
 
+### Testing
+
+Integration tests use comparisons to golden output files; these need to be regenerated when `baproto`'s implementation is updated. To regenerate golden files, run the tests with the `BAPROTO_UPDATE_GOLDENS` environment variable set to `1`:
+
+```sh
+BAPROTO_UPDATE_GOLDENS=1 cargo test
+```
+
 ### Code submission
 
 When submitting code for review, ensure the following requirements are met:
