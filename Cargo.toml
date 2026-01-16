@@ -19,5 +19,7 @@
   thiserror      = "2.0.17"
 
 [dev-dependencies]
-  rstest   = {version = "0.26.1", default-features = false}
-  tempfile = "3.24"
+  assert_cmd = "2.1.2"
+  rstest     = {version = "0.26.1", default-features = false}
+  syn        = {version = "2.0.114", features = ["full", "parsing"]}
+  tempfile   = "3.24.0"

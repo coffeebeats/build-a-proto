@@ -28,7 +28,7 @@ pub use subname::*;
 
 ## Tests
 
-Inline with Given/When/Then comments:
+Inline with all actions described by Given/When/Then comments (full sentences, end with period):
 
 ```rust
 /* -------------------------------------------------------------------------- */
@@ -44,8 +44,11 @@ mod tests {
     #[test]
     fn test_feature_scenario_outcome() {
         // Given: Setup description.
+        // Given: Another setup description.
         // When: Action description.
         // Then: Assertion description.
+        // When: Another action description.
+        // Then: Another assertion description.
     }
 }
 ```

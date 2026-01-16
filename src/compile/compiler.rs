@@ -125,7 +125,7 @@ impl Compiler {
         let tokens = result.tokens.ok_or_else(|| {
             vec![Diagnostic::error(
                 Span::default(),
-                "lexing failed with no specific error".to_string(),
+                "lexing failed with no specific error",
             )]
         })?;
 
@@ -142,7 +142,7 @@ impl Compiler {
         result.ast.ok_or_else(|| {
             vec![Diagnostic::error(
                 Span::default(),
-                "parse failed with no specific error".to_string(),
+                "parse failed with no specific error",
             )]
         })
     }
@@ -175,10 +175,13 @@ impl Compiler {
         // Declarative list of analyzers to run
         self.diagnostics
             .extend(Self::run_analyzer(ast, FieldIndexUniqueness::default()));
-        self.diagnostics.extend(Self::run_analyzer(
-            ast,
-            TypeReferenceResolver::new(&self.symbols, Descriptor::global()),
-        ));
+
+        if let Some(package_name) = ast.get_package_name() {
+            self.diagnostics.extend(Self::run_analyzer(
+                ast,
+                TypeReferenceResolver::new(&self.symbols, Descriptor::from(package_name)),
+            ));
+        }
 
         // TODO: Add more analyzers (encoding validation, etc.)
     }
@@ -188,7 +191,12 @@ impl Compiler {
     /// This handles package merging - if a package already exists in the IR,
     /// the new types are appended to it.
     fn lower_and_merge(&mut self, ast: &ast::Schema) {
-        let ctx = LowerContext::new(&self.symbols, Descriptor::global());
+        let package_name = match ast.get_package_name() {
+            Some(name) => name,
+            None => return, // Can't lower without valid package information.
+        };
+
+        let ctx = LowerContext::new(&self.symbols, Descriptor::from(package_name));
 
         // Lower the AST to a Package
         let package = match ast.lower(&ctx) {

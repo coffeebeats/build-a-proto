@@ -1,0 +1,8 @@
+Error: could not resolve reference: NonExistent
+   ╭─[ <temp>/invalid_type_ref.baproto:4:8 ]
+   │
+ 4 │     0: NonExistent field;
+   │        ─────┬─────  
+   │             ╰─────── could not resolve reference: NonExistent
+───╯
+Error: Compilation failed with 1 error(s).

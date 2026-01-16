@@ -1,0 +1,10 @@
+package test.encoded;
+
+message Encoded {
+    0: u32 compact = bits(16);
+    1: i32 signed_compact = zigzag;
+    2: u64 variable = bits(var(32));
+    3: i32 delta_encoded = delta;
+    4: f32 fixed_val = fixed_point(16, 16);
+    5: u32 padded = pad(8);
+}

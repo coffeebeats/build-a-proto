@@ -50,7 +50,7 @@ impl<'a> TypeCollector<'a> {
             None => {
                 return vec![Diagnostic::error(
                     Span::default(),
-                    "schema missing package declaration".to_string(),
+                    "schema missing package declaration",
                 )];
             }
         };
@@ -116,7 +116,23 @@ impl<'ast> Visitor<'ast> for TypeCollector<'_> {
         }
     }
 
+    fn visit_include(&mut self, node: &'ast ast::Include) {
+        if self.package.is_none() {
+            self.diagnostics.push(Diagnostic::error(
+                node.span.clone(),
+                "'include' statement cannot come before 'package' declaration",
+            ));
+        }
+    }
+
     fn visit_message(&mut self, msg: &'ast ast::Message) {
+        if self.package.is_none() {
+            self.diagnostics.push(Diagnostic::error(
+                msg.span.clone(),
+                "'message' definition cannot come before 'package' declaration",
+            ));
+        }
+
         self.register_type(&msg.name.name, TypeKind::Message);
 
         self.path.push(msg.name.name.clone());
@@ -126,12 +142,19 @@ impl<'ast> Visitor<'ast> for TypeCollector<'_> {
         self.path.pop();
     }
 
-    fn visit_enum(&mut self, enum_: &'ast ast::Enum) {
-        self.register_type(&enum_.name.name, TypeKind::Enum);
+    fn visit_enum(&mut self, enm: &'ast ast::Enum) {
+        if self.package.is_none() {
+            self.diagnostics.push(Diagnostic::error(
+                enm.span.clone(),
+                "'enum' definition cannot come before 'package' declaration",
+            ));
+        }
 
-        self.path.push(enum_.name.name.clone());
+        self.register_type(&enm.name.name, TypeKind::Enum);
 
-        walk::walk_enum(self, enum_);
+        self.path.push(enm.name.name.clone());
+
+        walk::walk_enum(self, enm);
 
         self.path.pop();
     }

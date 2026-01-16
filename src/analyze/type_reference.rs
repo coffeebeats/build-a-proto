@@ -62,6 +62,7 @@ impl<'a> TypeReferenceResolver<'a> {
                         vec![TypeKind::Message, TypeKind::Enum],
                     ));
                 }
+
                 Ok((descriptor, kind))
             }
             None => Err(ReferenceError::Unresolved(reference.clone())),
@@ -104,10 +105,8 @@ impl<'ast> Visitor<'ast> for TypeReferenceResolver<'_> {
 
     fn visit_reference(&mut self, reference: &'ast ast::Reference) {
         if let Err(err) = self.resolve(reference) {
-            self.diagnostics.push(Diagnostic::error(
-                reference.span.clone(),
-                format!("{}: '{}'", err, reference),
-            ));
+            self.diagnostics
+                .push(Diagnostic::error(reference.span.clone(), err.to_string()));
         }
     }
 }
