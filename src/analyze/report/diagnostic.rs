@@ -19,9 +19,9 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     /// `error` creates a new error [`Diagnostic`].
-    pub fn error(span: Span, message: impl Into<String>) -> Self {
+    pub fn error<T: AsRef<str>>(span: Span, message: T) -> Self {
         Self {
-            message: message.into(),
+            message: message.as_ref().to_owned(),
             severity: Severity::Error,
             span,
         }
@@ -29,9 +29,9 @@ impl Diagnostic {
 
     #[allow(unused)]
     /// `warning` creates a new warning [`Diagnostic`].
-    pub fn warning(span: Span, message: impl Into<String>) -> Self {
+    pub fn warning<T: AsRef<str>>(span: Span, message: T) -> Self {
         Self {
-            message: message.into(),
+            message: message.as_ref().to_owned(),
             severity: Severity::Warning,
             span,
         }
