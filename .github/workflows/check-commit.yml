@@ -224,6 +224,8 @@ jobs:
 
       - name: Test source code (with coverage)
         if: needs.changes.outputs.has_source_change == 'true'
+        env:
+          BAPROTO_UPDATE_GOLDENS: 0 # Ensure goldens are not regenerated.
         run: |
           cargo llvm-cov \
             --frozen \
