@@ -21,15 +21,6 @@ pub struct Descriptor {
 /* ---------------------------- Impl: Descriptor ---------------------------- */
 
 impl Descriptor {
-    /// `global` creates a [`Descriptor`] describing the compilation root (i.e.
-    /// global scope).
-    pub fn global() -> Descriptor {
-        Descriptor {
-            package: PackageName::try_from(vec!["__global__"]).unwrap(),
-            path: Vec::default(),
-        }
-    }
-
     /// `name` returns the last component of the path (the "name" of this type).
     /// Returns `None` if the path is empty (descriptor represents a package
     /// only).
@@ -75,6 +66,14 @@ impl fmt::Display for Descriptor {
         }
 
         Ok(())
+    }
+}
+
+/* ------------------------- Impl: From<PackageName> ------------------------ */
+
+impl From<PackageName> for Descriptor {
+    fn from(name: PackageName) -> Self {
+        DescriptorBuilder::default().package(name).build().unwrap()
     }
 }
 
