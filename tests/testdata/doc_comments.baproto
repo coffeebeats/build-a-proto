@@ -1,0 +1,22 @@
+// Ignored comment block.
+
+// A test package.
+package test.docs;
+
+// A user in the system.
+message User {
+    // The unique identifier.
+    0: u32 id;
+
+    // The user's display name.
+    1: string name;
+}
+
+// Account status.
+enum Status {
+    // Not yet activated.
+    0: Pending;
+
+    // Active and in good standing.
+    1: Active;
+}

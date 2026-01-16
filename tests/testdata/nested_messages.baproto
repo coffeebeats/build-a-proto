@@ -1,0 +1,17 @@
+package test.nesting;
+
+message Level1 {
+    0: u32 id;
+
+    message Level2 {
+        0: string name;
+
+        message Level3 {
+            0: bool active;
+        }
+
+        1: Level3 deepest;
+    }
+
+    1: Level2 nested;
+}

@@ -1,0 +1,6 @@
+package test.invalid;
+
+message Bad {
+    0: u32 first;
+    0: u32 second;
+}

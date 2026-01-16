@@ -1,0 +1,5 @@
+package test.invalid;
+
+message Bad {
+    0: NonExistent field;
+}

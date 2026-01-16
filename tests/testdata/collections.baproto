@@ -1,0 +1,9 @@
+package test.collections;
+
+message Container {
+    0: []u32 numbers;
+    1: []string names;
+    2: [10]u32 fixed_size;
+    3: [string]u32 counts;
+    4: [u32]string reverse;
+}
