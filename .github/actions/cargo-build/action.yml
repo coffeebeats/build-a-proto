@@ -181,7 +181,7 @@ runs:
         $CMD build \
           --frozen \
           --manifest-path=${{ inputs.manifest-path }} \
-          --offline \
+          --target-dir=${{ steps.rs-props.outputs.crate_dir }}/target \
           --profile=${{ inputs.profile }} \
           --target=${{ steps.rs-props.outputs.platform }} \
           "${TARGETS[@]}" \
