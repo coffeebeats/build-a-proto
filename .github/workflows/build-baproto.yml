@@ -79,7 +79,7 @@ jobs:
         id: setup-rust
         with:
           profile: minimal
-          version-file: Cargo.toml
+          manifest-path: Cargo.toml
           targets: ${{ inputs.target }}
 
       # Set minimum supported version to '11.1', which guarantees support for

@@ -60,7 +60,7 @@ jobs:
       - uses: "./.github/actions/setup-rust"
         id: setup-rust
         with:
-          version-file: Cargo.toml
+          manifest-path: Cargo.toml
           profile: minimal
 
       - uses: "./.github/actions/cargo-build"
@@ -89,7 +89,7 @@ jobs:
       - uses: "./.github/actions/setup-rust"
         id: setup-rust
         with:
-          version-file: Cargo.toml
+          manifest-path: Cargo.toml
           profile: minimal
           components: rustfmt
 
@@ -129,7 +129,7 @@ jobs:
       - uses: "./.github/actions/setup-rust"
         id: setup-rust
         with:
-          version-file: Cargo.toml
+          manifest-path: Cargo.toml
           profile: minimal
           components: clippy
 
@@ -159,7 +159,7 @@ jobs:
       - uses: "./.github/actions/setup-rust"
         id: setup-rust
         with:
-          version-file: Cargo.toml
+          manifest-path: Cargo.toml
           profile: minimal
 
       # No source code changes
