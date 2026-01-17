@@ -108,7 +108,7 @@ jobs:
           -czf ${{ inputs.archive-name }} \
           "baproto"
 
-      - name: Archive executable (Default)
+      - name: Archive executable (Windows)
         if: runner.os == 'Windows'
         run: |
           cat <<- EOM | python3 -c "$(</dev/stdin)"
