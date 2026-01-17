@@ -143,7 +143,8 @@ runs:
       shell: bash
       run: |
         cargo vendor \
-          --manifest-path=${{ inputs.manifest-path }}
+          --manifest-path=${{ inputs.manifest-path }} \
+          ${{ steps.rs-props.outputs.crate_dir }}/vendor
 
         mkdir -p "${{ steps.rs-props.outputs.crate_dir }}/.cargo"
 
@@ -152,7 +153,7 @@ runs:
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "vendor"
+        directory = "${{ steps.rs-props.outputs.crate_dir }}/vendor"
         EOM
 
     - name: Compile the project
