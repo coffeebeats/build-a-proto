@@ -142,9 +142,8 @@ jobs:
           components: clippy
           version: ${{  steps.rust.outputs.version }}
 
-      - uses: "./.github/actions/cargo-build"
-        with:
-          profile: release
+      # NOTE: 'cargo clippy' does not seem to use the 'cargo build' cache; as
+      # such, skip loading the build cache.
 
       - name: Lint 'rust' source
         run: |
