@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 (2026-01-17)
+
+## What's Changed
+* feat: add a `lib.rs` so consumers can use `baproto` as a crate dependency by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/78
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.0...v0.2.1
+
 ## 0.2.0 (2026-01-16)
 
 ## What's Changed
