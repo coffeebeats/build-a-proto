@@ -47,7 +47,7 @@ runs:
       if: inputs.version-file != ''
       id: parse-config
       with:
-        manifest: ${{ inputs.version-file }}
+        manifest-path: ${{ inputs.version-file }}
 
     - name: Install rust (stable)
       id: install
