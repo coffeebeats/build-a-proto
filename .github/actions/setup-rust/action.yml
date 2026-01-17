@@ -48,11 +48,6 @@ runs:
       shell: bash
       run: |
         VERSION="${{ inputs.version }}"
-        if [[ -z "$VERSION" ]]; then
-          echo "missing Rust version; must specify 'version'"
-          exit 1
-        fi
-
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
         CMD=("rustup toolchain install $VERSION")

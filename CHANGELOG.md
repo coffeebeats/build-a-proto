@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2 (2026-01-17)
+
+## What's Changed
+* fix(ci): make `version` input to `setup-rust` action not required by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/80
+* chore(ci): rename `manifest` to more common `manifest-path` by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/81
+* chore(ci): standardize `manifest-path` argument name in `setup-rust` action by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/83
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.1...v0.2.2
+
 ## 0.2.1 (2026-01-17)
 
 ## What's Changed
