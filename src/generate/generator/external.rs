@@ -27,6 +27,7 @@ use super::{Generator, GeneratorError, GeneratorOutput};
 /// **Exit codes:**
 /// - `0` = success
 /// - non-zero = failure (stderr contains error message)
+#[allow(unused)]
 pub struct ExternalGenerator {
     binary_path: PathBuf,
     name: String,
@@ -37,6 +38,7 @@ pub struct ExternalGenerator {
 impl ExternalGenerator {
     /// `new` creates a new [`ExternalGenerator`] wrapper. The specified binary
     /// path must exist and be executable.
+    #[allow(unused)]
     pub fn new(binary_path: impl Into<PathBuf>) -> Result<Self, GeneratorError> {
         let binary_path = binary_path.into();
 

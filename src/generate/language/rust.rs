@@ -371,6 +371,7 @@ impl Rust {
 /*                               Function: rust                               */
 /* -------------------------------------------------------------------------- */
 
+#[allow(unused)]
 pub fn rust<W: Writer>() -> impl Language<W> {
     Rust::default()
 }

@@ -86,6 +86,7 @@ pub trait Generator: Send + Sync {
     ///
     /// This is used for logging and error messages.
     /// Examples: "rust", "gdscript", "cpp"
+    #[allow(unused)]
     fn name(&self) -> &str;
 
     /// Generates code from the IR schema.

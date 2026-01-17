@@ -13,6 +13,7 @@ pub struct StringWriter(String);
 
 impl StringWriter {
     /// Consumes the [`Writer`] and returns the accumulated content.
+    #[allow(unused)]
     pub fn into_content(self) -> String {
         self.0
     }
