@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "baproto"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "ariadne",
