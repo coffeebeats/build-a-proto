@@ -2,7 +2,7 @@ name: "🏗️ Compile: Rust crate/workspace"
 description: "Uses 'cargo' to compile the root project with caching enabled."
 
 inputs:
-  manifest:
+  manifest-path:
     description: "A path to the project's 'Cargo.toml'."
     required: false
     default: "Cargo.toml"
@@ -54,7 +54,7 @@ runs:
         echo "set rustc=$RUSTC_VERSION"
 
         PY_RELPATH='import os,sys; print(os.path.relpath(sys.stdin.read()))'
-        CRATE_DIR="$(echo $(dirname ${{ inputs.manifest }}) | python3 -c "$PY_RELPATH")"
+        CRATE_DIR="$(echo $(dirname ${{ inputs.manifest-path }}) | python3 -c "$PY_RELPATH")"
         echo "crate_dir=$CRATE_DIR" >> $GITHUB_OUTPUT
         echo "set crate_dir=$CRATE_DIR"
 
@@ -143,7 +143,7 @@ runs:
       shell: bash
       run: |
         cargo vendor \
-          --manifest-path=${{ inputs.manifest }}
+          --manifest-path=${{ inputs.manifest-path }}
 
         mkdir -p "${{ steps.rs-props.outputs.crate_dir }}/.cargo"
 
@@ -179,7 +179,7 @@ runs:
 
         $CMD build \
           --frozen \
-          --manifest-path=${{ inputs.manifest }} \
+          --manifest-path=${{ inputs.manifest-path }} \
           --offline \
           --profile=${{ inputs.profile }} \
           --target=${{ steps.rs-props.outputs.platform }} \
