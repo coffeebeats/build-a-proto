@@ -57,11 +57,14 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
+      - uses: "./.github/actions/parse-rust-version"
+        id: rust
+
       - uses: "./.github/actions/setup-rust"
-        id: setup-rust
         with:
           manifest-path: Cargo.toml
           profile: minimal
+          version: ${{ steps.rust.outputs.version }}
 
       - uses: "./.github/actions/cargo-build"
         with:
@@ -86,12 +89,15 @@ jobs:
           # Use a PAT so that GitHub Actions will trigger on the resulting commit.
           token: ${{ secrets.ACTIONS_BOT }}
 
+      - uses: "./.github/actions/parse-rust-version"
+        id: rust
+
       - uses: "./.github/actions/setup-rust"
-        id: setup-rust
         with:
           manifest-path: Cargo.toml
           profile: minimal
           components: rustfmt
+          version: ${{  steps.rust.outputs.version }}
 
       - name: Check Rust source formatting
         id: format
@@ -126,12 +132,15 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
+      - uses: "./.github/actions/parse-rust-version"
+        id: rust
+
       - uses: "./.github/actions/setup-rust"
-        id: setup-rust
         with:
           manifest-path: Cargo.toml
           profile: minimal
           components: clippy
+          version: ${{  steps.rust.outputs.version }}
 
       - uses: "./.github/actions/cargo-build"
         with:
@@ -156,11 +165,15 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
+      - uses: "./.github/actions/parse-rust-version"
+        id: rust
+
       - uses: "./.github/actions/setup-rust"
         id: setup-rust
         with:
           manifest-path: Cargo.toml
           profile: minimal
+          version: ${{  steps.rust.outputs.version }}
 
       # No source code changes
 

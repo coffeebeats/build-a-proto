@@ -75,12 +75,15 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
 
+      - uses: "./.github/actions/parse-rust-version"
+        id: rust
+
       - uses: "./.github/actions/setup-rust"
-        id: setup-rust
         with:
           profile: minimal
           manifest-path: Cargo.toml
           targets: ${{ inputs.target }}
+          version: ${{ steps.rust.outputs.version }}
 
       # Set minimum supported version to '11.1', which guarantees support for
       # M1 macs (see https://developer.apple.com/support/xcode).
