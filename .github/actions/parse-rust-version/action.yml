@@ -4,7 +4,8 @@ description: "Parse the rust version specified from a 'Cargo.toml' manifest file
 inputs:
   manifest-path:
     description: "A path to the 'Cargo.toml' manifest to parse."
-    required: true
+    required: false
+    default: "Cargo.toml"
   strict:
     description: "Whether to fail if 'rust_version' is not specified."
     required: false

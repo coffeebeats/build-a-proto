@@ -4,11 +4,11 @@ description: "Overrides the Rust environment installed to the runner."
 inputs:
   version:
     description: "The toolchain version string to pass to 'rustup' (e.g. 1.68.2 or nightly)."
-    required: false
+    required: true
   manifest-path:
     description: "Parse the rust version from the provided 'Cargo.toml' manifest file."
     required: false
-    default: ""
+    default: "Cargo.toml"
   profile:
     description: "Specify a 'rustup' profile during installation."
     required: false
@@ -43,31 +43,11 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: "./.github/actions/parse-rust-version"
-      if: inputs.manifest-path != ''
-      id: parse-config
-      with:
-        manifest-path: ${{ inputs.manifest-path }}
-
     - name: Install rust (stable)
       id: install
       shell: bash
       run: |
         VERSION="${{ inputs.version }}"
-        if [[ ! -z "${{ inputs.manifest-path }}" ]]; then
-          if [[ ! -z "${{ inputs.version }}" ]]; then
-            echo "cannot specify both 'version' and 'manifest-path'"
-            exit 1
-          fi
-
-          VERSION="${{ steps.parse-config.outputs.version }}"
-        fi
-
-        if [[ -z "$VERSION" ]]; then
-          echo "missing Rust version; specify either 'version' or 'manifest-path'"
-          exit 1
-        fi
-
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
         CMD=("rustup toolchain install $VERSION")
