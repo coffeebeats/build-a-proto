@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3 (2026-01-17)
+
+## What's Changed
+* fix(ci): remove local action dependency from `setup-rust` action by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/84
+* fix(ci): vendor crates next to crate manifest by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/86
+* fix(ci): use correct vendor directory in `config.toml` by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/88
+* fix: remove dependency on `lexical` by disabling unused feature by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/87
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.2...v0.2.3
+
 ## 0.2.2 (2026-01-17)
 
 ## What's Changed
