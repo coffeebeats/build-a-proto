@@ -4,7 +4,7 @@ description: "Overrides the Rust environment installed to the runner."
 inputs:
   version:
     description: "The toolchain version string to pass to 'rustup' (e.g. 1.68.2 or nightly)."
-    required: true
+    required: false
   version-file:
     description: "Parse the rust version from the provided 'Cargo.toml' manifest file."
     required: false
