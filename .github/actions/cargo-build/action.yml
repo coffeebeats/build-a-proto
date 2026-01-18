@@ -21,16 +21,24 @@ inputs:
     description: "A comma- or new line-separated list of project targets to build (e.g. lib or bins)."
     required: false
     default: "all"
+  use_cross:
+    description: "Whether to use 'cross' for compilation."
+    required: false
+    default: false
+  extra_args:
+    description: "Additional arguments to pass to the build command."
+    required: false
+    default: ""
   target-dir:
     description: "A path to the project's 'target' directory for build artifacts."
     required: false
   vendor-dir:
     description: "A path to the project's 'vendor' directory for crate dependencies."
     required: false
-  use_cross:
-    description: "Whether to use 'cross' for compilation."
+  modify-cargo-config:
+    description: "Whether to append vendor sources to the crate's Cargo config."
     required: false
-    default: false
+    default: true
   skip_cargo_crates_cache:
     description: "Whether to skip caching of globally installed cargo commands."
     required: false
@@ -43,10 +51,6 @@ inputs:
     description: "Whether to skip caching crate build artifacts."
     required: false
     default: false
-  extra_args:
-    description: "Additional arguments to pass to the build command."
-    required: false
-    default: ""
 
 runs:
   using: "composite"
