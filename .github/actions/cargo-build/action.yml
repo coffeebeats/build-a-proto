@@ -64,11 +64,11 @@ runs:
         echo "crate_dir=$CRATE_DIR" >> $GITHUB_OUTPUT
         echo "set crate_dir=$CRATE_DIR"
 
-        TARGET_DIR=$([[ ! -z "${{ inputs.target-dir }}" ]] && "${{ inputs.target-dir }}" || "$CRATE_DIR/target" )
+        TARGET_DIR=$([[ ! -z "${{ inputs.target-dir }}" ]] && echo "${{ inputs.target-dir }}" || echo "$CRATE_DIR/target" )
         echo "target_dir=$TARGET_DIR" >> $GITHUB_OUTPUT
         echo "set target_dir=$TARGET_DIR"
 
-        VENDOR_DIR=$([[ ! -z "${{ inputs.vendor-dir }}" ]] && "${{ inputs.vendor-dir }}" || "$CRATE_DIR/vendor" )
+        VENDOR_DIR=$([[ ! -z "${{ inputs.vendor-dir }}" ]] && echo "${{ inputs.vendor-dir }}" || echo "$CRATE_DIR/vendor" )
         echo "vendor_dir=$VENDOR_DIR" >> $GITHUB_OUTPUT
         echo "set vendor_dir=$VENDOR_DIR"
 
