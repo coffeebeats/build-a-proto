@@ -170,8 +170,8 @@ runs:
         # key or restore key), otherwise this will be duplicated.
         if [[ \
           "${{ inputs.modify-cargo-config }}" == "true" && \
-          ${{ steps.cache-cargo-registry.outputs.cache-hit }} == "" && \
-          ${{ steps.cache-cargo-build.outputs.cache-hit }} == "" \
+          "${{ steps.cache-cargo-registry.outputs.cache-hit }}" == "" && \
+          "${{ steps.cache-cargo-build.outputs.cache-hit }}" == "" \
         ]]; then
           cat >> "${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml" << EOM
         [source.crates-io]
