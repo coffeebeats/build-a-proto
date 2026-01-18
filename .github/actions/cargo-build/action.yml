@@ -21,6 +21,12 @@ inputs:
     description: "A comma- or new line-separated list of project targets to build (e.g. lib or bins)."
     required: false
     default: "all"
+  target-dir:
+    description: "A path to the project's 'target' directory for build artifacts."
+    required: false
+  vendor-dir:
+    description: "A path to the project's 'vendor' directory for crate dependencies."
+    required: false
   use_cross:
     description: "Whether to use 'cross' for compilation."
     required: false
@@ -57,6 +63,14 @@ runs:
         CRATE_DIR="$(echo $(dirname ${{ inputs.manifest-path }}) | python3 -c "$PY_RELPATH")"
         echo "crate_dir=$CRATE_DIR" >> $GITHUB_OUTPUT
         echo "set crate_dir=$CRATE_DIR"
+
+        TARGET_DIR=$([[ ! -z "${{ inputs.target-dir }}" ]] && "${{ inputs.target-dir }}" || "$CRATE_DIR/target" )
+        echo "target_dir=$TARGET_DIR" >> $GITHUB_OUTPUT
+        echo "set target_dir=$TARGET_DIR"
+
+        VENDOR_DIR=$([[ ! -z "${{ inputs.vendor-dir }}" ]] && "${{ inputs.vendor-dir }}" || "$CRATE_DIR/vendor" )
+        echo "vendor_dir=$VENDOR_DIR" >> $GITHUB_OUTPUT
+        echo "set vendor_dir=$VENDOR_DIR"
 
         HOST_TRIPLE="$(rustc -v --version | grep host | sed 's/.*[ ]//')"
         PLATFORM="$(t="${{ inputs.platform }}"; echo "${t:-$HOST_TRIPLE}")"
@@ -122,8 +136,8 @@ runs:
           ) }}
         path: |
           ${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml
-          ${{ steps.rs-props.outputs.crate_dir }}/target
-          ${{ steps.rs-props.outputs.crate_dir }}/vendor
+          ${{ steps.rs-props.outputs.target_dir }}
+          ${{ steps.rs-props.outputs.vendor_dir }}
         restore-keys: |
           cache-cargo-build- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}- ${{ steps.rs-props.outputs.rustc }}-
           cache-cargo-build- ${{ runner.os }}- ${{ steps.rs-props.outputs.platform }}-
@@ -144,7 +158,7 @@ runs:
       run: |
         cargo vendor \
           --manifest-path=${{ inputs.manifest-path }} \
-          ${{ steps.rs-props.outputs.crate_dir }}/vendor
+          ${{ steps.rs-props.outputs.vendor_dir }}
 
         mkdir -p "${{ steps.rs-props.outputs.crate_dir }}/.cargo"
 
@@ -153,7 +167,7 @@ runs:
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "vendor"
+        directory = "${{ steps.rs-props.outputs.vendor_dir }}"
         EOM
 
     - name: Compile the project
@@ -181,7 +195,7 @@ runs:
         $CMD build \
           --frozen \
           --manifest-path=${{ inputs.manifest-path }} \
-          --target-dir=${{ steps.rs-props.outputs.crate_dir }}/target \
+          --target-dir=${{ steps.rs-props.outputs.target_dir }} \
           --profile=${{ inputs.profile }} \
           --target=${{ steps.rs-props.outputs.platform }} \
           "${TARGETS[@]}" \
