@@ -174,12 +174,12 @@ runs:
           ${{ steps.cache-cargo-build.outputs.cache-hit }} == "" \
         ]]; then
           cat >> "${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml" << EOM
-          [source.crates-io]
-          replace-with = "vendored-sources"
+        [source.crates-io]
+        replace-with = "vendored-sources"
 
-          [source.vendored-sources]
-          directory = "${{ steps.rs-props.outputs.vendor_dir }}"
-          EOM
+        [source.vendored-sources]
+        directory = "${{ steps.rs-props.outputs.vendor_dir }}"
+        EOM
         fi
 
     - name: Compile the project
