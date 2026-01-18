@@ -162,13 +162,19 @@ runs:
 
         mkdir -p "${{ steps.rs-props.outputs.crate_dir }}/.cargo"
 
-        cat >> "${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml" << EOM
-        [source.crates-io]
-        replace-with = "vendored-sources"
+        pip install tomlkit
 
-        [source.vendored-sources]
-        directory = "${{ steps.rs-props.outputs.vendor_dir }}"
+        PY_SCRIPT=$(cat << EOM
+        from tomlkit import load
+        with open("${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml", "w") as f:
+          cfg=load(f)
+          cfg["source.crates-io"]["replace-with"] = "vendored-sources"
+          cfg["source.vendored-sources"]["directory"] = "${{ steps.rs-props.outputs.vendor_dir }}"
+
+          dump(cfg, f)
         EOM
+        )
+        python -c "$PY_SCRIPT"
 
     - name: Compile the project
       if: steps.cache-cargo-build.outputs.cache-hit != 'true'
