@@ -21,16 +21,24 @@ inputs:
     description: "A comma- or new line-separated list of project targets to build (e.g. lib or bins)."
     required: false
     default: "all"
+  use_cross:
+    description: "Whether to use 'cross' for compilation."
+    required: false
+    default: false
+  extra_args:
+    description: "Additional arguments to pass to the build command."
+    required: false
+    default: ""
   target-dir:
     description: "A path to the project's 'target' directory for build artifacts."
     required: false
   vendor-dir:
     description: "A path to the project's 'vendor' directory for crate dependencies."
     required: false
-  use_cross:
-    description: "Whether to use 'cross' for compilation."
+  modify-cargo-config:
+    description: "Whether to append vendor sources to the crate's Cargo config."
     required: false
-    default: false
+    default: true
   skip_cargo_crates_cache:
     description: "Whether to skip caching of globally installed cargo commands."
     required: false
@@ -43,10 +51,6 @@ inputs:
     description: "Whether to skip caching crate build artifacts."
     required: false
     default: false
-  extra_args:
-    description: "Additional arguments to pass to the build command."
-    required: false
-    default: ""
 
 runs:
   using: "composite"
@@ -162,13 +166,21 @@ runs:
 
         mkdir -p "${{ steps.rs-props.outputs.crate_dir }}/.cargo"
 
-        cat >> "${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml" << EOM
+        # NOTE: Only modify Cargo config if there was *no* cache hit (neither
+        # key or restore key), otherwise this will be duplicated.
+        if [[ \
+          "${{ inputs.modify-cargo-config }}" == "true" && \
+          ${{ steps.cache-cargo-registry.outputs.cache-hit }} == "" && \
+          ${{ steps.cache-cargo-build.outputs.cache-hit }} == "" \
+        ]]; then
+          cat >> "${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml" << EOM
         [source.crates-io]
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
         directory = "${{ steps.rs-props.outputs.vendor_dir }}"
         EOM
+        fi
 
     - name: Compile the project
       if: steps.cache-cargo-build.outputs.cache-hit != 'true'
