@@ -17,6 +17,7 @@ pub use compile::compile;
 
 pub use generate::Language;
 pub use generate::{CodeWriter, CodeWriterBuilder, CodeWriterBuilderError};
+pub use generate::{FileWriter, StringWriter, Writer};
 pub use generate::{Generator, GeneratorError, GeneratorOutput};
 
 /* --------------------------------- Mod: IR -------------------------------- */
