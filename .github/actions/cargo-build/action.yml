@@ -35,10 +35,6 @@ inputs:
   vendor-dir:
     description: "A path to the project's 'vendor' directory for crate dependencies."
     required: false
-  modify-cargo-config:
-    description: "Whether to append vendor sources to the crate's Cargo config."
-    required: false
-    default: true
   skip_cargo_crates_cache:
     description: "Whether to skip caching of globally installed cargo commands."
     required: false
@@ -133,13 +129,12 @@ runs:
           ${{ steps.rs-props.outputs.platform }}-
           ${{ steps.rs-props.outputs.rustc }}-
           ${{ hashFiles(
-            format('{0}/src/**/*.rs', steps.rs-props.outputs.crate_dir),
             format('{0}/Cargo.toml', steps.rs-props.outputs.crate_dir),
             format('{0}/Cargo.lock', steps.rs-props.outputs.crate_dir),
-            format('{0}/.cargo/config.toml', steps.rs-props.outputs.crate_dir)
+            format('{0}/**/*.rs', steps.rs-props.outputs.crate_dir),
+            format('{0}/**/.cargo/config.toml', steps.rs-props.outputs.crate_dir)
           ) }}
         path: |
-          ${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml
           ${{ steps.rs-props.outputs.target_dir }}
           ${{ steps.rs-props.outputs.vendor_dir }}
         restore-keys: |
@@ -164,23 +159,18 @@ runs:
           --manifest-path=${{ inputs.manifest-path }} \
           ${{ steps.rs-props.outputs.vendor_dir }}
 
-        mkdir -p "${{ steps.rs-props.outputs.crate_dir }}/.cargo"
+    - name: Configure vendored dependencies
+      shell: bash
+      run: |
+        mkdir -p "$HOME/.cargo"
 
-        # NOTE: Only modify Cargo config if there was *no* cache hit (neither
-        # key or restore key), otherwise this will be duplicated.
-        if [[ \
-          "${{ inputs.modify-cargo-config }}" == "true" && \
-          "${{ steps.cache-cargo-registry.outputs.cache-hit }}" == "" && \
-          "${{ steps.cache-cargo-build.outputs.cache-hit }}" == "" \
-        ]]; then
-          cat >> "${{ steps.rs-props.outputs.crate_dir }}/.cargo/config.toml" << EOM
+        cat > "$HOME/.cargo/config.toml" << EOM
         [source.crates-io]
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "${{ steps.rs-props.outputs.vendor_dir }}"
+        directory = "$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
         EOM
-        fi
 
     - name: Compile the project
       if: steps.cache-cargo-build.outputs.cache-hit != 'true'
