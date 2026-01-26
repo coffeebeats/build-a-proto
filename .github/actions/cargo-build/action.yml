@@ -162,7 +162,7 @@ runs:
     - name: Configure vendored dependencies
       shell: bash
       run: |
-        mkdir -p /.cargo
+        sudo mkdir -p /.cargo
 
         cat > "/.cargo/config.toml" << EOM
         [source.crates-io]
