@@ -162,9 +162,15 @@ runs:
     - name: Configure vendored dependencies
       shell: bash
       run: |
-        mkdir -p "$HOME/.cargo"
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          CARGO_HOME="${CARGO_HOME:-$USERPROFILE/.cargo}"
+        else
+          CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+        fi
 
-        cat > "$HOME/.cargo/config.toml" << EOM
+        mkdir -p "$CARGO_HOME"
+
+        cat > "$CARGO_HOME/config.toml" << EOM
         [source.crates-io]
         replace-with = "vendored-sources"
 
