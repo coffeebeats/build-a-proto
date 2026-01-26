@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.4 (2026-01-26)
+
+## What's Changed
+* fix(ci): specify `target-dir` when compiling to support non-root crate usage by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/89
+* fix(ci): skip build cache when linting as `cargo clippy` ignores it by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/91
+* chore(ci): correct mislabeled step name by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/92
+* fix(ci): don't overwrite `.cargo/config.toml` with vendor directory by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/93
+* fix(ci): add `target-dir` and `vendor-dir` arguments to `cargo-build` action by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/94
+* fix(ci): eliminate Cargo config duplication by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/95
+* fix(ci): fix syntax in bash conditional by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/96
+* chore: export `generate::Writer` trait and string/file implementers by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/97
+* chore(lib): export `core` types by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/98
+* fix(ci): update CI runner cargo config instead of project's by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/99
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.3...v0.2.4
+
 ## 0.2.3 (2026-01-17)
 
 ## What's Changed
