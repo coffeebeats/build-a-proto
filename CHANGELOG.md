@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6 (2026-01-27)
+
+## What's Changed
+* fix(ci): construct correct vendor path on Windows by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/106
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.5...v0.2.6
+
 ## 0.2.5 (2026-01-27)
 
 ## What's Changed
