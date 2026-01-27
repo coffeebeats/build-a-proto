@@ -162,9 +162,6 @@ runs:
     - name: Configure vendored dependencies
       shell: bash
       run: |
-        VENDOR_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
-        echo "Adding Cargo configuration: directory=$VENDOR_PATH"
-
         CARGO_CFG_PATH="$HOME/.cargo/config.toml"
 
         cat > "$CARGO_CFG_PATH" << EOM
@@ -172,7 +169,7 @@ runs:
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "$VENDOR_PATH"
+        directory = "$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
         EOM
 
         echo "Created Cargo configuration file: $CARGO_CFG_PATH"
