@@ -164,13 +164,10 @@ runs:
       run: |
         CARGO_CFG_PATH="$HOME/.cargo/config.toml"
 
-
-        if [[ "${{ runner.os }}" == "Windows" ]]; then
-          CARGO_CFG_PATH="$USERPROFILE/.cargo/config.toml"
-          echo "CARGO_HOME=$USERPROFILE/.cargo" >> $GITHUB_ENV
-        fi
-
         VENDORED_DEPS_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          VENDORED_DEPS_PATH="$(cygpath -w $VENDORED_DEPS_PATH | sed 's/\\/\//g')"
+        fi
 
         cat > "$CARGO_CFG_PATH" << EOM
         [source.crates-io]
