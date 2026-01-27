@@ -164,12 +164,17 @@ runs:
       run: |
         CARGO_CFG_PATH="$HOME/.cargo/config.toml"
 
+        VENDORED_DEPS_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          VENDORED_DEPS_PATH="$(cygpath -w $VENDORED_DEPS_PATH | sed 's/\\/\//g')"
+        fi
+
         cat > "$CARGO_CFG_PATH" << EOM
         [source.crates-io]
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
+        directory = "$VENDORED_DEPS_PATH"
         EOM
 
         echo "Created Cargo configuration file: $CARGO_CFG_PATH"
