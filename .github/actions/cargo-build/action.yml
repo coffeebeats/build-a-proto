@@ -162,18 +162,20 @@ runs:
     - name: Configure vendored dependencies
       shell: bash
       run: |
-        sudo mkdir -p /.cargo
+        CARGO_CFG_PATH="$HOME/.cargo/config.toml"
 
-        VENDOR_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
-        echo "Adding Cargo configuration: directory=$VENDOR_PATH"
-
-        sudo sh -c "cat > /.cargo/config.toml" << EOM
+        cat > "$CARGO_CFG_PATH" << EOM
         [source.crates-io]
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "$VENDOR_PATH"
+        directory = "$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
         EOM
+
+        echo "Created Cargo configuration file: $CARGO_CFG_PATH"
+        echo "Contents:"
+
+        cat "$CARGO_CFG_PATH"
 
     - name: Compile the project
       if: steps.cache-cargo-build.outputs.cache-hit != 'true'
