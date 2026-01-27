@@ -164,12 +164,15 @@ runs:
       run: |
         sudo mkdir -p /.cargo
 
-        cat > "/.cargo/config.toml" << EOM
+        VENDOR_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
+        echo "Adding Cargo configuration: directory=$VENDOR_PATH"
+
+        sudo sh -c "cat > /.cargo/config.toml" << EOM
         [source.crates-io]
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
+        directory = "$VENDOR_PATH"
         EOM
 
     - name: Compile the project
