@@ -165,46 +165,20 @@ runs:
         VENDOR_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
         echo "Adding Cargo configuration: directory=$VENDOR_PATH"
 
-        VENDOR_CFG=$(cat << EOM
+        CARGO_CFG_PATH="$HOME/.cargo/config.toml"
+
+        cat > "$CARGO_CFG_PATH" << EOM
         [source.crates-io]
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
         directory = "$VENDOR_PATH"
         EOM
-        )
 
-        case "${{ runner.os }}" in
-          "macOS" )
-            echo "MACOS:"
-            echo "HOME: $HOME"
-            echo "CARGO_HOME: $CARGO_HOME"
+        echo "Created Cargo configuration file: $CARGO_CFG_PATH"
+        echo "Contents:"
 
-            echo "$VENDOR_CFG" > $HOME/.cargo/config.toml
-          ;;
-          "Linux" )
-            echo "LINUX:"
-            echo "HOME: $HOME"
-            echo "CARGO_HOME: $CARGO_HOME"
-
-            echo "$VENDOR_CFG" > $HOME/.cargo/config.toml
-          ;;
-          "Windows" )
-            echo "WINDOWS:"
-            echo "HOME: $HOME"
-            echo "CARGO_HOME: $CARGO_HOME"
-            echo "USERPROFILE: $USERPROFILE"
-            echo "VENDOR_CFG: $HOME\.cargo\config.toml"
-
-            echo "$VENDOR_CFG" > "$HOME/.cargo/config.toml"
-          ;;
-        esac
-
-        echo "VENDOR CFG:"
-        echo "$VENDOR_CFG"
-        echo "\nfile:"
-        ls "$HOME/.cargo/config.toml"
-        cat "$HOME/.cargo/config.toml"
+        cat "$CARGO_CFG_PATH"
 
     - name: Compile the project
       if: steps.cache-cargo-build.outputs.cache-hit != 'true'
