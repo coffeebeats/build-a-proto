@@ -172,7 +172,7 @@ runs:
         replace-with = "vendored-sources"
 
         [source.vendored-sources]
-        directory = "$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
+        directory = "$VENDOR_PATH"
         EOM
 
     - name: Compile the project
