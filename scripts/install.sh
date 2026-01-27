@@ -110,7 +110,7 @@ parse_params "$@"
 
 # ------------------------------ Define: Version ----------------------------- #
 
-BAPROTO_VERSION="${BAPROTO_VERSION:-0.2.4}" # x-release-please-version
+BAPROTO_VERSION="${BAPROTO_VERSION:-0.2.5}" # x-release-please-version
 BAPROTO_VERSION="v${BAPROTO_VERSION#v}"
 
 # ----------------------------- Define: Platform ----------------------------- #

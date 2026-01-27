@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.5 (2026-01-27)
+
+## What's Changed
+* fix(ci): use correct `$CARGO_HOME` path on Windows by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/100
+* fix(ci): use a cross-platform compatible Cargo config directory by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/102
+* fix(ci): add missing permission when creating directory under `/` by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/103
+* fix(ci): add `sudo` when creating Cargo config under `/.cargo` by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/104
+* fix(ci): correctly set Cargo vendored dependencies configuration cross-platform by @coffeebeats in https://github.com/coffeebeats/build-a-proto/pull/105
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.4...v0.2.5
+
 ## 0.2.4 (2026-01-26)
 
 ## What's Changed
