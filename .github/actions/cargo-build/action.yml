@@ -162,12 +162,13 @@ runs:
     - name: Configure vendored dependencies
       shell: bash
       run: |
-        VENDORED_DEPS_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
+        CARGO_CFG_PATH="$HOME/.cargo/config.toml"
+
         if [[ "${{ runner.os }}" == "Windows" ]]; then
-          VENDORED_DEPS_PATH="$(cygpath -w $VENDORED_DEPS_PATH)"
+          CARGO_CFG_PATH="$USERPROFILE/.cargo/config.toml"
         fi
 
-        CARGO_CFG_PATH="$HOME/.cargo/config.toml"
+        VENDORED_DEPS_PATH="$(realpath "${{ steps.rs-props.outputs.vendor_dir }}")"
 
         cat > "$CARGO_CFG_PATH" << EOM
         [source.crates-io]
