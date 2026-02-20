@@ -10,7 +10,7 @@
 # NOTE: Unlike the 'install.sh' counterpart, this script exclusively installs
 # the 'baprotoc' binary for 64-bit Windows. If an alternative 'baproto' binary is
 # required, follow the documentation for an alternative means of installation:
-# https://github.com/coffeebeats/baproto/blob/v0.2.6/docs/installation.md # x-release-please-version
+# https://github.com/coffeebeats/baproto/blob/v0.2.7/docs/installation.md # x-release-please-version
 
 <#
 .SYNOPSIS
@@ -34,7 +34,7 @@
   $env:BAPROTO_HOME\bin\baproto.exe
 
 .NOTES
-  Version:        0.2.6 # x-release-please-version
+  Version:        0.2.7 # x-release-please-version
   Author:         https://github.com/coffeebeats
 
 .LINK
@@ -48,7 +48,7 @@ Param (
   [Switch] $NoModifyPath = $False,
 
   # Version - override the specific version of 'baproto' to install
-  [String] $Version = "v0.2.6" # x-release-please-version
+  [String] $Version = "v0.2.7" # x-release-please-version
 )
 
 # ------------------------- Function: Get-BaProtoHome ------------------------- #
