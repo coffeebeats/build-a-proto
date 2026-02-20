@@ -22,4 +22,4 @@
   assert_cmd = "2.1.2"
   rstest     = {version = "0.26.1", default-features = false}
   syn        = {version = "2.0.117", features = ["full", "parsing"]}
-  tempfile   = "3.24.0"
+  tempfile   = "3.25.0"
