@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.7 (2026-02-20)
+
+## What's Changed
+* chore(deps): bump clap from 4.5.53 to 4.5.60 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/116
+* chore(deps): bump thiserror from 2.0.17 to 2.0.18 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/115
+* chore(deps): bump syn from 2.0.114 to 2.0.117 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/114
+* chore(deps): bump actions/checkout from 6.0.1 to 6.0.2 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/113
+* chore(deps): bump tempfile from 3.24.0 to 3.25.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/112
+* chore(deps): bump tj-actions/changed-files from 47.0.1 to 47.0.4 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/110
+* chore(deps): bump anyhow from 1.0.100 to 1.0.102 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/111
+* chore(deps): bump actions/cache from 4.2.3 to 5.0.3 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/108
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.6...v0.2.7
+
 ## 0.2.6 (2026-01-27)
 
 ## What's Changed
