@@ -117,7 +117,7 @@ jobs:
             a.write("target/${{ inputs.target }}/release/baproto.exe", arcname="baproto.exe")
           EOM
 
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: ${{ inputs.target }}
           path: ${{ inputs.archive-name }}
