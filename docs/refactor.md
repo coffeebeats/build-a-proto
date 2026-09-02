@@ -963,3 +963,79 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   accessor (after E8).
 - GDExtension runtime: when GDScript codec throughput is the measured
   bottleneck.
+
+## 7. References
+
+Outside sources that inform the wire design and the keep column. Each entry
+names the part of this document it backs so a reader can check the claim
+against the original. Transport, reliability, and session material from the
+same authors is deliberately absent: it sits above `baproto` and only shapes
+what the IR must be able to express.
+
+### 7.1 Gaffer on Games (Glenn Fiedler)
+
+- **Reading and Writing Packets**, from *Building a Game Network Protocol*.
+  <https://gafferongames.com/post/reading_and_writing_packets/>. The
+  bitpacker: 64-bit scratch word, LSB-first bit order, little-endian flush,
+  bits derived from a value range, and range validation on every read. Backs
+  the packed-mode column of the layout table in 5.3 and the `reader.gd` and
+  `writer.gd` runtime contract (D1).
+- **Serialization Strategies**, same series.
+  <https://gafferongames.com/post/serialization_strategies/>. Bounded
+  integers, floats compressed to a normalized integer range, byte-aligned
+  length-prefixed strings and arrays, sparse array subsets with relative index
+  encoding, and protocol id plus checksum plus in-stream serialization checks.
+  Backs `Quantized`, `LenSpec`, `Optional`, and the `layout_hash` and `wire_id`
+  decisions in 5.2 and E7. The protocol id is folded into the checksum but
+  never transmitted; that trick is the alternative to sending the composed
+  hash in the handshake.
+- **Snapshot Compression**, from *Networked Physics*.
+  <https://gafferongames.com/post/snapshot_compression/>. Smallest-three
+  quaternions, bounded position and velocity quantization, at-rest flags, and
+  delta encoding against an acknowledged baseline. Backs E3, E5, and E6, and
+  is the source of the split in E6 between what the codec owns (baseline
+  comparison) and what the sync layer owns (acks and history).
+- **Snapshot Interpolation** and **State Synchronization**, same series.
+  <https://gafferongames.com/post/snapshot_interpolation/>,
+  <https://gafferongames.com/post/state_synchronization/>. Define the
+  publishable-state message and its send rate, which is the traffic packed
+  mode exists for (1.1, 1.2).
+- **Deterministic Lockstep** and **Floating Point Determinism**.
+  <https://gafferongames.com/post/deterministic_lockstep/>,
+  <https://gafferongames.com/post/floating_point_determinism/>. Relevant only
+  to the `Quantized` decode path: the formula must be bit-exact across
+  platforms, so the corpus (5.4) checks decoded values, not just bytes.
+
+### 7.2 Development and Deployment of Multiplayer Online Games (Ignatchenko)
+
+Vol. I, *GDD, Authoritative Servers, Communications*. Chapter 3,
+"Communications", is the relevant chapter; its four parts are listed in the
+order they matter here.
+
+- **3(d) Protocols. IDL: Encodings, Mappings, and Backward Compatibility.**
+  Argues for a declarative IDL with three separate concerns: the data
+  declaration, the encoding declaration (per-field bit widths, fixed-point
+  ranges, bit-oriented versus byte-oriented streams), and the mapping to
+  language types. That triad is `Field`, `WireSpec`, and the host type on
+  scalar leaves (5.3). The same part contrasts field-tagged extensible
+  encodings with compact positional ones and recommends keeping both,
+  chosen per message. That is the packed and tagged split (1.2, 5.2) and the
+  reason cross-mode embedding is specified rather than forbidden.
+- **3(b) Protocols. World States and Reducing Traffic.** Server state versus
+  publishable state versus client state, delta compression against a
+  reference base, dead reckoning as compression, and bit-level encoding as
+  the final step. Same conclusion as Snapshot Compression: the codec owns
+  the leaf encodings and the baseline comparison (E6), nothing more.
+- **3(c) Protocols. Point-to-Point Communications and Non-blocking RPCs.**
+  Message-type discriminators and request ids in the envelope. Backs E7 and
+  E8.
+- **3(a) Protocols. RTT, Input Lag, and Mitigation.** Background for why
+  packed mode exists; no direct design consequence.
+
+Vol. II, Chapter 5 "(Re)Actors" and Chapter 6 "Client-Side Architecture",
+touch this work only through the plugin: deterministic reactors want
+recordable, replayable message logs, which argues for the `decode` CLI (C7)
+and a stable IR JSON format (A2). The author's shorter "64 Network DO's and
+DON'Ts for Game Engines" series, part II "Protocols and APIs", is a condensed
+version of 3(d).
+<https://leanpub.com/development-and-deployment-of-multiplayer-online-games-vol1>
