@@ -933,7 +933,14 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
 - [ ] **E1. `optional T`** with a presence bit.
 - [ ] **E2. `varint`** as an explicit encoding on integers.
 - [ ] **E3. `range(min, max)`** on integers (bits derived from range) and
-  **`quantize(min, max, bits)`** on floats.
+  **`quantize(min, max, bits)`** on floats. In the same PR add a
+  warning-level check: an `f32` or `f64` field in a packed message with no
+  `quantize` reports "unbounded float in packed message; consider
+  `quantize(min, max, bits)`". Silence it per field with an explicit `raw`
+  encoding, which is also the spelling that makes the choice visible in
+  review. *Why:* both references treat a raw float in a snapshot as a
+  mistake (7.1); the check is one arm in the check pass and it steers users
+  toward the encoding packed mode exists for.
 - [ ] **E4. Bounded arrays** `[N]T` with the length bits derived from `N`,
   and a check that unbounded arrays are rejected in packed mode.
 - [ ] **E5. Native vector types** `vec2`, `vec3`, `quat` with a
@@ -992,9 +999,10 @@ what the IR must be able to express.
 - **Snapshot Compression**, from *Networked Physics*.
   <https://gafferongames.com/post/snapshot_compression/>. Smallest-three
   quaternions, bounded position and velocity quantization, at-rest flags, and
-  delta encoding against an acknowledged baseline. Backs E3, E5, and E6, and
-  is the source of the split in E6 between what the codec owns (baseline
-  comparison) and what the sync layer owns (acks and history).
+  delta encoding against an acknowledged baseline. Backs E3, including its
+  raw-float warning, E5, and E6, and is the source of the split in E6
+  between what the codec owns (baseline comparison) and what the sync layer
+  owns (acks and history).
 - **Snapshot Interpolation** and **State Synchronization**, same series.
   <https://gafferongames.com/post/snapshot_interpolation/>,
   <https://gafferongames.com/post/state_synchronization/>. Define the
