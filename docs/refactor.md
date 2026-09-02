@@ -74,8 +74,46 @@ language without a conformance fixture and a consumer that needs it.**
 - **Field indices are decorative.** Uniqueness is checked, then declaration
   order is used for layout. Unindexed fields are silently dropped during
   lowering (`self.index.as_ref()?`).
+- **The backend re-does instruction selection.** `codec/wire.rs` in the
+  backend pattern-matches on `(NativeType, WireFormat)` pairs, roughly twenty
+  arms, and bails with "unsupported encoding combination" on anything else.
+  `bits(12)` on an unsigned integer without `zigzag` is rejected even though
+  the runtime has `write_bits`. The 64-bit arms emit calls to `write_u64` and
+  `read_u64`, which the runtime does not define. Nothing compiles generated
+  GDScript in CI, so neither was caught.
 - **Docs are stale.** `docs/commands.md` describes `--cpp | --gdscript` flags
   that do not exist; the CLI has `--rust | --plugin`.
+
+### 2.1.1 How the Godot plugin drives the compiler
+
+The plugin's `EditorImportPlugin` (`import/plugin.gd`) runs once per
+`.baproto` file Godot imports. It invokes
+`baproto-gdscript generate -o <project-wide output dir> -I res:// <file>`,
+the compiler emits every type reachable from that file, including types from
+included files, and the importer then scans the entire output directory and
+registers every `.gd` it finds as that one import's generated files. It also
+writes a comment-only stub script as the import's own save file.
+
+Consequences:
+
+- Importing file A rewrites and claims file B's outputs. Harmless while the
+  contents are identical, but ownership is wrong and cleanup on removal is
+  undefined.
+- No import ever sees the whole program, so whole-program artifacts (a type
+  registry, a project-wide schema hash) cannot be generated correctly.
+- Godot's importer does not track include dependencies, so editing B does not
+  reimport A. Anything A's generated code copies from B's layout goes stale.
+
+The backend also contains a full GDScript syntax tree and emitter
+(`src/gdscript/ast/`, ~2.3k lines). That is a sound backend design; it means
+the library's `CodeWriter` is used only for indent and comment tokens.
+
+The types the backend actually imports from `baproto` today, which is the
+de-facto public API: the whole `ir` module (`Schema`, `Package`, `Message`,
+`Enum`, `Field`, `Variant`, `Encoding`, `NativeType`, `WireFormat`,
+`Transform`), `Descriptor` and `DescriptorBuilder`, `PackageName`,
+`Generator`, `GeneratorError`, `GeneratorOutput`, `CodeWriter` and its
+builder, `Writer`, `StringWriter`, and `compile`.
 
 ### 2.2 Data flow
 
@@ -202,9 +240,18 @@ plugins (protobuf's `FileDescriptorProto` role), the wire specification
 walk. It does none of them completely. Its doc comment says "self-describing,
 serialization-first, no validation", yet it carries `WireFormat` and
 `Transform`, yet leaves `Embedded`, prefix widths, and discriminant widths for
-the backend to reinterpret. The GDScript backend has its own `collect.rs` to
-rebuild a type index because the IR references types by dotted name with no
-table.
+the backend to reinterpret.
+
+Two further symptoms in the backend. It has a `collect.rs` whose job is to
+flatten the IR's nested message tree into one entry per type with
+`Outer_Inner` file stems, and a `types.rs` that computes relative preload
+paths from `Descriptor` and detects "this is one of my nested types" by a
+string-prefix test on the file stem. Both exist because the IR nests types as
+vectors with no parent link and no flat table. And `WireSpec`-level facts
+(signedness, zigzag, float versus integer) are split between `NativeType` and
+`WireFormat`, so the backend must pattern-match on the pair to choose a
+runtime primitive (section 2.1). The IR is not lowered far enough for a
+backend to be a syntax-directed translation.
 
 ### 3.4 Encoding semantics are applied but never checked
 
@@ -227,6 +274,11 @@ wrote, and the protocol is unversioned.
 What was actually built is flatc's architecture: in-process generators over a
 library. That is a good choice. The protoc-style plugin layer is a second
 architecture bolted alongside.
+
+Note for whoever deletes the `Writer` family: `CodeWriter` is generic over
+the `Writer` trait, and the GDScript backend's own emitter is written as
+`emit<W: Writer>` over `StringWriter`. They cannot simply be removed; see
+task A2.
 
 ### 3.6 `Descriptor` does three jobs
 
@@ -416,8 +468,54 @@ No upward references. `TypeKind` lives in `sema`.
   IR and the Godot binary stays a thin `Generator` over it, which is what it
   already is. When a non-Rust backend arrives, the serialized IR plus
   `format_version` is already the contract.
-- **Files stay in the IR.** Generators default to one output per input file
-  like protoc; the GDScript backend can keep splitting per type.
+- **`WireSpec` is a closed instruction set and is self-sufficient.** A
+  backend must be able to pick the runtime primitive from the `WireSpec`
+  alone, without consulting `NativeType`. `f32` and `u32` must not both be
+  "32 fixed bits"; signedness and zigzag are variants, not side flags. Each
+  variant maps to exactly one primitive in a runtime (`write_bits`,
+  `write_varint`, `write_bytes`, and so on). Enum layout (discriminant width
+  plus per-variant payload spec) is part of the IR for the same reason.
+- **The IR is a flat arena, not a tree.** Types live in one `Vec<Type>`
+  indexed by `TypeId`; nesting is `parent: Option<TypeId>` and
+  `nested: Vec<TypeId>` (Cap'n Proto's `Node.scopeId`). Backends that want
+  one file per type flatten for free; backends that want inner classes walk
+  `nested`. The GDScript `collect.rs` and the prefix-string hack disappear.
+- **The IR carries source locations.** protoc keeps `SourceCodeInfo`, capnpc
+  keeps `sourceInfo`. Backends produce real errors (a Godot `int` is 64-bit
+  signed, so `u64` cannot round-trip) and the Godot importer shows compiler
+  output to the user. Each type and field carries `{ file, line, col }`, and
+  `Generator` returns diagnostics with locations, not `anyhow` strings.
+- **There is an IR verifier.** LLVM has `Verifier`, rustc validates MIR. An
+  `ir::verify(&Schema) -> Diagnostics` checks id ranges, `WireSpec` against
+  `NativeType`, mode rules, and index rules. It runs in tests and before
+  generation. It is cheap and protects every backend and the reference
+  encoder.
+- **Everything is deterministic.** `TypeId`s are assigned by input-file order
+  then declaration order; output collections are ordered (`BTreeMap` or
+  `Vec`). Godot reimports on every save, so unstable output means spurious
+  churn.
+- **Files stay in the IR, and generation takes a request.** protoc separates
+  `file_to_generate` from the full file set and passes a per-backend
+  `parameter`. `GenerateRequest { files_to_generate: Vec<FileId>, parameters }`
+  does the same: dependencies are visible, only the named files are emitted.
+  The runtime path the GDScript backend hardcodes (`res://addons/baproto/runtime`)
+  is a parameter.
+- **Generated code never inlines another file's layout.** Godot's importer
+  does not reimport A when an included B changes. So A's generated code calls
+  B's codec for embedded fields and composes B's schema hash at runtime; it
+  never copies B's field layout or hash constant. Under this rule per-file
+  import cannot go stale. Whole-program artifacts (the registry, E7) are
+  regenerated on every import by passing every `.baproto` under `res://` as
+  the compile set with `files_to_generate` = the imported file plus the
+  registry.
+- **Default output is one script per input file.** With `files_to_generate`
+  the natural GDScript shape is one `.gd` per `.baproto` using inner classes,
+  and that script can be the importer's own save file. Then
+  `preload("res://schemas/game.baproto")` yields the script and
+  `Game.Player.new()` works, with no output-directory setting, no `mod.gd`
+  tree, no `gen_files`, no directory scan, and no orphan cleanup. This needs a
+  short spike to confirm an imported `Script` loads by its source path (task
+  D2).
 
 ### 5.3 Sketch of the core types
 
@@ -441,23 +539,49 @@ pub enum Mode { Packed, Tagged }
 pub struct FieldDef { name, index: Option<u32>, ty: TypeRef, encoding: EncodingSpec, span, doc }
 pub enum TypeRef { Scalar(Scalar), Named(TypeId), Array { elem: Box<TypeRef>, len: ArrayLen }, /* later: Optional, Vec3, Quat */ }
 
-// layout/
+// layout/   one variant == one runtime primitive; self-sufficient (5.2)
 pub enum WireSpec {
-    Fixed { bits: u32 },
-    Varint { max_bits: u32 },
+    Bool,                                           // 1 bit
+    Uint { bits: u32 },                             // fixed width, unsigned
+    Int { bits: u32 },                              // fixed width, two's complement
+    ZigZag { bits: u32 },                           // fixed width, zigzag-mapped
+    Varint { signed: bool },                        // LEB128, zigzag if signed
+    Float { bits: u32 },                            // 32 or 64, IEEE bit pattern
     Quantized { min: f64, max: f64, bits: u32 },
-    LengthPrefixed { len_bits: u32, elem: Box<WireSpec> },
-    FixedArray { len: u32, elem: Box<WireSpec> },
+    Bytes { len: LenSpec },                         // raw bytes
+    Utf8 { len: LenSpec },                          // string
+    Array { len: LenSpec, elem: Box<WireSpec> },
     Optional { inner: Box<WireSpec> },              // 1 presence bit
-    Embedded { ty: TypeId },
-    Tagged { tag_bits: u32, inner: Box<WireSpec> }, // tagged mode only
+    Message { ty: TypeId },                         // call that type's codec
+    Enum { ty: TypeId },                            // discriminant + payload per that type's layout
 }
+pub enum LenSpec { Fixed(u32), Prefix { bits: u32 }, Varint }
 
 // ir/schema.rs   (serde; the contract)
 pub struct Schema { format_version: u32, files: Vec<File>, types: Vec<Type> }
-pub struct Message { id: TypeId, full_name: String, file: usize, mode: Mode, schema_hash: u64, fields: Vec<Field> }
-pub struct Field { name, index: Option<u32>, native: NativeType, wire: WireSpec, doc }
+pub struct File { path: String, package: String, includes: Vec<usize>, types: Vec<TypeId> }
+pub enum Type { Message(Message), Enum(Enum) }
+pub struct Message {
+    id: TypeId, full_name: String, file: usize, parent: Option<TypeId>, nested: Vec<TypeId>,
+    mode: Mode, layout_hash: u64,   // hash of own laid-out fields; embedded types compose at runtime
+    fields: Vec<Field>, loc: SourceLoc, doc: Option<String>,
+}
+pub struct Enum { id, full_name, file, parent, discriminant: WireSpec, variants: Vec<Variant>, loc, doc }
+pub struct Field { name, index: Option<u32>, native: NativeType, wire: WireSpec, loc: SourceLoc, doc }
+pub struct SourceLoc { file: usize, line: u32, col: u32 }
+
+// codegen/
+pub struct GenerateRequest { files_to_generate: Vec<usize>, parameters: BTreeMap<String, String> }
+pub trait Generator {
+    fn generate(&self, schema: &ir::Schema, req: &GenerateRequest) -> Result<Vec<GeneratedFile>, Diagnostics>;
+}
 ```
+
+Tagged mode wire shape (fixed by task C6, stated here so the sketch is
+complete): each present field is `varint tag, varint payload length in bits,
+payload`; the message ends with tag `0`. A reader skips unknown tags by
+length. Protobuf's wire-kind scheme saves a few bits but needs a kind per
+`WireSpec`; the service plane does not care about the bits.
 
 ### 5.4 Conformance corpus
 
@@ -466,6 +590,14 @@ with sample values and the expected wire bytes (hex) plus bit length. The Rust
 crate owns an in-memory reference encoder that computes expected bytes from
 the IR and a value tree. Every backend runs the corpus. This is the only test
 that proves the IR determines the wire.
+
+The IR cannot express the bit-stream conventions themselves: bit order within
+a byte (the GDScript runtime packs least-significant bit first), byte order of
+fixed-width integers, float bit patterns, the varint form, string bytes
+(UTF-8), and what a length counts (bits, bytes, or elements). Today these
+live only in `runtime/writer.gd`. They belong in a `docs/wire.md` that the
+reference encoder implements and the corpus checks; the document is the
+specification and the encoder is its executable form.
 
 ## 6. Task checklist
 
@@ -484,12 +616,15 @@ parser. Do not add features to the language until task 12.
   docs. *Why:* no consumer exists; the only backend links the crate. The
   serialized IR with a format version (task C3) is the future plugin contract
   if one is ever needed.
-- [ ] **A2. Delete `Language<W>` and the `Writer` family.** Remove
-  `generate/language/`, `generate/write/`, and the `RustGenerator` that uses
-  them. Keep `Generator`, `GeneratorOutput`, and `CodeWriter`. Remove the Rust
-  golden tests and goldens (they test a `todo!()` stub). *Why:* three
-  generator abstractions for one real backend. If a Rust backend returns
-  later it will be written against the new IR.
+- [ ] **A2. Delete `Language<W>`, `FileWriter`, and the `RustGenerator`.**
+  Remove `generate/language/` and the Rust golden tests and goldens (they test
+  a `todo!()` stub). Retarget `CodeWriter` from the `Writer` trait onto
+  `std::fmt::Write` so a plain `String` is the sink, then delete `Writer`,
+  `FileWriter`, and `StringWriter`. *Why:* three generator abstractions for
+  one real backend. *Caution:* the GDScript backend's emitter is generic over
+  `baproto::Writer` and uses `StringWriter` throughout; it pins a git revision
+  so nothing breaks immediately, but the next bump must swap those for
+  `String` and `fmt::Write`. Note in the changelog.
 - [ ] **A3. Fix stale docs.** Rewrite `docs/commands.md` to match the actual
   CLI. Replace the README "How it works" TODO with a short pipeline summary
   pointing at this document. *Why:* three different CLI surfaces are
@@ -500,6 +635,13 @@ parser. Do not add features to the language until task 12.
 
 ### Phase B: straighten the plumbing
 
+- [ ] **B0. Compile generated GDScript in the plugin's CI.** In
+  `godot-plugin-baproto`, generate output for a small fixture set and run
+  headless Godot over it (at minimum a parse check; the runtime already has
+  Gut tests to hang a smoke test on). *Why:* today the backend emits calls to
+  runtime methods that do not exist (`write_u64`) and nothing notices. This is
+  cheap, backend-only, and independent of every other task; it should land
+  before the IR changes so D2 has a safety net.
 - [ ] **B1. Introduce `FileId` and `SourceMap`; make `Span` a value type.**
   Replace `SimpleSpan<usize, SchemaImport>` with `Span { file: FileId, start, end }`.
   `SourceMap` owns paths and text and implements ariadne's `Cache`. Keep
@@ -539,12 +681,23 @@ parser. Do not add features to the language until task 12.
   small `Model` directly. *Why:* section 3.10; lowering must not be able to
   drop fields silently.
 - [ ] **C3. Redefine the IR as descriptor plus layout.** Add `format_version`,
-  a `files` list, a `types` arena indexed by `TypeId`, and `full_name` on
-  every type. Replace `WireFormat`/`Transform`/`padding_bits` with a
-  `WireSpec` that fully determines the bits (section 5.3). Remove
+  a `files` list, a flat `types` arena indexed by `TypeId` with
+  `parent`/`nested` links, `full_name` and a `SourceLoc` on every type and
+  field. Replace `WireFormat`/`Transform`/`padding_bits` with the
+  self-sufficient `WireSpec` of section 5.3, including enum layout. Remove
   `Map` from `NativeType` (arrays of pair messages are the wire; see 1.2).
-  *Why:* section 3.3; this is the contract the conformance corpus and every
-  backend depend on. Bump the format version whenever it changes.
+  Assign ids deterministically (file order, then declaration order) and use
+  ordered collections everywhere. *Why:* sections 3.3 and 5.2; this is the
+  contract the conformance corpus and every backend depend on. Bump the
+  format version whenever it changes.
+- [ ] **C3b. Add `ir::verify`.** A function from `&Schema` to `Diagnostics`
+  that checks every `TypeId` is in range, every `WireSpec` agrees with its
+  `NativeType` (a `Float` spec on an integer is an error), tagged messages
+  have unique indices and packed ones have none, `nested`/`parent` are
+  consistent, and `files_to_generate` in a request name real files. Run it in
+  every IR test and in the driver before generation. *Why:* section 5.2; the
+  IR is a contract shared by the reference encoder and every backend, and a
+  verifier is the standard way to keep an IR honest.
 - [ ] **C4. Add the check passes.** Field indices (uniqueness, plus the mode
   rules once C6 lands), encoding-versus-type legality (`bits(n)` only on
   integers and within native width; `zigzag` only on signed; `varint` only on
@@ -554,35 +707,65 @@ parser. Do not add features to the language until task 12.
   annotation.
 - [ ] **C5. Add the layout pass.** A pure function from `Model` to per-field
   `WireSpec`, per-enum discriminant width (minimum bits for the variant
-  count), and a per-message `schema_hash` (hash of the fully laid-out
-  structure, stable across doc changes and field renames in packed mode).
-  *Why:* the IR must state what the backend emits; the hash is the handshake
-  guard for packed mode.
+  count), and a per-type `layout_hash`. Define the hash precisely: it covers
+  the type's own laid-out `WireSpec` sequence and mode, excludes names, docs,
+  and source locations, and for an embedded field hashes only the fact of
+  embedding and the referenced type's full name, not that type's layout. The
+  handshake hash is then composed at runtime from `layout_hash` values across
+  the embedded-type graph (or over the registry from E7), which is what keeps
+  per-file Godot import from going stale (section 5.2). *Why:* the IR must
+  state what the backend emits; the hash is the handshake guard for packed
+  mode.
 - [ ] **C6. Add message mode (`packed` | `tagged`).** Parser support for a
   per-message mode (the unused `encoding` keyword is the natural slot), model
   field, check rules (indices required in tagged, forbidden in packed), and
-  tagged layout (tag width from max index; a length or wire-type prefix so
-  unknown fields can be skipped). Default is `packed`. *Why:* section 1.1;
-  this replaces optional per-field indices with a coherent choice.
-- [ ] **C7. Define the public API.** `lib.rs` exports exactly: `compile(request) -> Result<ir::Schema, Diagnostics>`
-  (with a `CompileRequest { files, import_roots }`), the `ir` types,
-  `Generator`, `GeneratedFile`, `CodeWriter`, and `Diagnostics` rendering.
-  Nothing from `syntax` or `sema`. *Why:* section 3.11; the backend should
-  not need the CLI or internals.
+  the tagged wire shape from section 5.3: per present field a varint tag, a
+  varint payload length in bits, and the payload; a terminator tag `0`; an
+  unknown tag is skipped by its length. Add a conformance fixture that decodes
+  a message with an unknown field. Default is `packed`. *Why:* section 1.1;
+  this replaces optional per-field indices with a coherent choice, and
+  "skippable" is only meaningful once the skip scheme is written down.
+- [ ] **C7. Define the public API.** `lib.rs` exports exactly:
+  `compile(&CompileRequest) -> Result<ir::Schema, Diagnostics>` with
+  `CompileRequest { files, import_roots }`; the `ir` types and `ir::verify`;
+  `GenerateRequest { files_to_generate, parameters }`; the `Generator` trait
+  returning `Result<Vec<GeneratedFile>, Diagnostics>`; `Diagnostics` with a
+  renderer that takes the `SourceMap`. Nothing from `syntax` or `sema`.
+  `CodeWriter` is optional: the GDScript backend has its own emitter and uses
+  it only for tokens, so either keep it over `fmt::Write` or drop it. *Why:*
+  section 3.11; the backend should not need the CLI or internals, and the
+  list in section 2.1.1 is what it reaches for today.
 
 ### Phase D: prove the wire
 
-- [ ] **D1. Build the conformance corpus.** `tests/conformance/*.baproto`
-  each with a values file and expected bytes. Implement a reference encoder in
-  the crate that walks the IR and a value tree. Golden-test the IR JSON for
-  each schema as well. *Why:* section 5.4; without this no claim about
-  bandwidth or compatibility is testable.
-- [ ] **D2. Bring the GDScript backend onto the new IR.** Delete its own
-  defaults (`collect.rs` type index, varint-for-everything lengths, varint
-  discriminants) and make it obey `WireSpec` exactly. Delete nested-package
-  directory and namespace generation (section 1.2). Run the conformance corpus
-  through generated GDScript in CI (headless Godot). *Why:* this is the first
-  moment the IR and a backend agree, and the first end-to-end test.
+- [ ] **D1. Write `docs/wire.md` and build the conformance corpus.** First
+  write the bit-stream specification (section 5.4): bit order, byte order,
+  float representation, varint form, string bytes, length units, the packed
+  and tagged message shapes. Match the existing GDScript runtime where it has
+  already chosen (least-significant-bit-first packing, LEB128). Then
+  `tests/conformance/*.baproto`, each with a values file and expected bytes,
+  and a reference encoder in the crate that walks the IR and a value tree
+  according to that document. Golden-test the IR JSON for each schema as
+  well. *Why:* section 5.4; without this no claim about bandwidth or
+  compatibility is testable, and without the document the runtime is the
+  only specification.
+- [ ] **D2. Bring the GDScript backend onto the new IR.** Delete
+  `collect.rs`, the prefix-string dependency detection, the
+  `(NativeType, WireFormat)` matching in `codec/wire.rs`, and the
+  varint-for-everything defaults; map each `WireSpec` variant to exactly one
+  runtime primitive and obey it. Delete nested-package directory and
+  namespace generation (section 1.2). Honour `files_to_generate`. Spike the
+  one-script-per-schema-file output with inner classes as the importer's own
+  save file (section 5.2) and adopt it if an imported `Script` loads by its
+  source path; otherwise keep per-type files but only for the requested
+  file. Change `import/plugin.gd` to pass every `.baproto` under `res://` as
+  the compile set, register only its own outputs, and stop scanning the
+  output directory. Enforce the rule that generated code never inlines
+  another file's layout: embedded fields call the other type's codec, and
+  hashes compose at runtime. Run the conformance corpus through generated
+  GDScript in CI (headless Godot). *Why:* this is the first moment the IR and
+  a backend agree, the first end-to-end test, and the fix for the import
+  ownership and staleness problems in section 2.1.1.
 - [ ] **D3. Remove dead language features.** `delta`, `fixed_point`, `pad`,
   `bits(var(n))`, `bit`, `byte`, maps. Keep the parser able to give a good
   error for the removed spellings. *Why:* section 1.2; each is parsed then
