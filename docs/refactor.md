@@ -26,18 +26,24 @@ multiplayer game:
 | Realtime state sync (snapshots, inputs) | `packed`: positional, declaration order, no field tags, bit-exact | Bandwidth. Both ends run the same schema version, enforced by a schema hash exchanged at handshake. |
 | Service / RPC (account actions, async PvP, matchmaking) | `tagged`: field indices on the wire, unknown fields skippable | Schema evolution. Client and server deploy independently. Bandwidth is nearly irrelevant here. |
 
-Mode is a **per-message** (or per-encoding-declaration) property, never a
-per-field one. A message whose fields are partly tagged and partly positional
-has no coherent wire format. This mirrors FlatBuffers `table` (evolvable)
-versus `struct` (fixed positional) and the book's split of *structure*,
-*encoding*, and *language mapping* ("Development and Deployment of Multiplayer
-Online Games", Vol. II, IDL chapters).
+Mode is a property of the **outermost message being encoded**, never of a
+field. A message declares the mode it uses when it is that outermost message,
+and every message embedded inside it takes the enclosing mode. A message
+whose fields are partly tagged and partly positional has no coherent wire
+format, and a type reached from both planes simply has two layouts. This is
+ASN.1's model, one abstract type with the encoding rules chosen at the root
+(7.3), rather than FlatBuffers' `table` versus `struct`, which fixes the mode
+on the type. Section 1.3 gives the rules. The book's split of *structure*,
+*encoding*, and *language mapping* ("Development and Deployment of
+Multiplayer Online Games", Vol. I, chapter 3(d)) is why the encoding hints
+stay separate from the data inside the compiler even though they are written
+next to the field.
 
 ### 1.2 Keep / cut decisions
 
 | Item | Decision | When to revisit |
 |---|---|---|
-| Field indices | Keep as `tagged` mode, message-level, required there and forbidden in `packed`. Cut *optional per-field* indices. | Now, with defined skip semantics. |
+| Field indices | Keep, as part of the data declaration: optional in the syntax, required on every field of a message that has a tagged layout, ignored by the packed layout (1.3). What is cut is the *decorative* index that no layout reads. | Now, with defined skip semantics. |
 | Positional encoding | Keep as `packed` mode plus schema hash for handshake. | Now. |
 | Structure / encoding / mapping split | Build it. This is the mechanism that gives flexibility without feature sprawl. | Now. |
 | `range`, `quantize`, `optional`, `varint`, `smallest_three`, `vec2`/`vec3`/`quat` | Add, driven by the snapshot packer. | After the model and layout passes exist. |
@@ -45,7 +51,7 @@ Online Games", Vol. II, IDL chapters).
 | Maps on the wire | Cut. Wire is an array of key/value pairs (this is how protobuf encodes maps). `Dictionary` accessors can be language-mapping sugar later. | Mapping layer, later. |
 | `delta`, `fixed_point`, `pad`, `bits(var(n))`, `bit`, `byte` scalars | Cut. Each is parsed and then dropped or unsupported by the backend. | Never. |
 | `include` and flat packages | Keep. | Shared types across client and server. |
-| Embedding across modes (`packed` inside `tagged`, `tagged` inside `packed`) | Allow both. A tagged child inside a packed parent is byte-aligned and contributes a constant to the parent's hash; a packed child inside a tagged parent is a length-prefixed opaque payload. | Now, with the layout rules in 5.3. |
+| Embedding across modes (`packed` inside `tagged`, `tagged` inside `packed`) | Cut as a wire shape. An embedded message takes the enclosing mode, so a type used from both planes has two layouts (1.3, 5.3). | When a packed snapshot must carry an independently evolving blob. |
 | Nested package directory trees and namespace scripts in the backend | Cut. | Never. |
 | Services (`service` declaration: method ids, request/response pairing, envelope) | Add, small. | When the async PvP server exists. |
 | Rust backend | Cut now. | When a Rust server exists, and only after the conformance corpus exists. |
@@ -54,6 +60,46 @@ Online Games", Vol. II, IDL chapters).
 
 The guard against scope creep is a rule, not a list: **nothing enters the
 language without a conformance fixture and a consumer that needs it.**
+
+### 1.3 Where encoding choices live
+
+The references were read for one question: one encoding per message, or
+several (7.1, 7.2, 7.3). The decision below is biased toward the smallest
+scope that keeps the flexibility a solo developer will actually use.
+
+1. **Two modes, chosen at the root.** A message declares `packed` (the
+   default) or `tagged`, and the declaration applies when the message is the
+   outermost thing encoded. Embedded messages take the enclosing mode. A
+   message reached from roots of both modes gets both layouts and two
+   generated codecs. Cross-mode embedding as a distinct wire shape is cut.
+   The declared layout is always built, so a helper type used only from
+   tagged roots should say `tagged`: otherwise the packed rules (bounded
+   arrays, no recursion) apply to a layout nothing uses.
+2. **Size hints are facts about the data and stay on the field.** `range`,
+   `quantize`, and array and string bounds describe the value, so they are
+   written next to it and mean the same under both modes. This is what an
+   ASN.1 constraint is, and unaligned PER derives bit widths from
+   constraints the way the packed layout does here. Named per-field
+   encoding blocks separate from the data (Ignatchenko's `ENCODING`
+   declarations, ASN.1's ECN) are not built: they need a rule for nested
+   messages, they multiply generated code and fixtures, and ECN is the
+   standardised form of that idea that nobody adopted.
+3. **Full versus delta is a runtime argument, not a declaration.** Whether
+   to send everything or only what changed depends on what the peer has
+   acknowledged, which only the sync layer knows. E6 adds a baseline
+   parameter to the packed codec and the schema does not change.
+4. **Field indices belong to the data declaration**, not to tagged mode.
+   They are optional in the syntax. The check pass requires them on every
+   field of a message that has a tagged layout and on every variant of an
+   enum used from one; the packed layout ignores them.
+5. **Escape hatches that need no compiler feature.** A genuinely different
+   shape for the same data, such as a low-detail variant for distant
+   objects, is a second message type. Data that must survive years of schema
+   changes, a replay or a save, is sent under a tagged root.
+
+Revisit trigger for the cut in item 1: a packed snapshot that must carry an
+independently evolving blob. That is the one case the old cross-mode rule
+served, and it has no consumer today.
 
 ## 2. Current architecture
 
@@ -419,7 +465,7 @@ dependencies pointing only downward.
       |  check:   indices, encodings vs types, cycles, mode rules, reserved
       v
  sema::Model (whole program, resolved, still has spans)             sema/
-      |  layout: pure function of the model and each message's mode
+      |  layout: pure function of the model and the modes each message is used in
       |          -> bit widths, prefix widths, discriminant widths, presence bits,
       |             tag widths, schema hash
       v
@@ -440,8 +486,10 @@ src/
   diagnostics/   Diagnostic, Severity, Diagnostics (collector), ariadne emitter
   syntax/        token.rs, lexer.rs, ast.rs, parser.rs        (today's lex/, parse/, ast/)
   sema/          model.rs   TypeDef, FieldDef, TypeRef (incl. Error), EncodingSpec
-                 collect.rs resolve.rs check/{index,encoding,cycle,mode}.rs
-  layout/        wire.rs    Model + Mode -> ir::WireSpec per field, layout_hash per type
+                 collect.rs resolve.rs modes.rs (which modes reach each type)
+                 check/{index,encoding,cycle,mode}.rs
+  layout/        wire.rs    Model -> ir::WireSpec per field per used mode,
+                            layout_hash per packed layout
   lower/         lower(&Model, &Layout) -> ir::Schema
   codegen/       Generator trait, GeneratedFile, GenerateRequest, CodeWriter
   driver.rs      compile(request) -> Result<ir::Schema, Diagnostics>
@@ -495,20 +543,25 @@ leaf resolves all three and keeps the public API free of `sema` (task C7).
   expressed in existing variants where possible; a genuinely new variant
   requires a new runtime primitive and a conformance fixture. Enums are
   C-like; there is no per-variant payload.
-- **Mode decides layout at the use site, not on the type.** Mode is a
-  per-message property, so the wire form of an enum discriminant, an
+- **Mode decides layout at the use site, not on the type.** A message
+  declares the mode it uses as a root; everything embedded in it takes the
+  enclosing mode (1.3). So the wire form of an enum discriminant, an
   `optional`, an array length, and an embedded message is chosen by the
-  layout pass from the *enclosing* message's mode. A packed message gets
-  the minimum-width discriminant and a presence bit; a tagged message gets a
-  varint discriminant and expresses optionality as tag absence, so adding an
-  enum variant in the service plane is a compatible change. The table in 5.3
+  layout pass from the *enclosing* mode, and a type reached from both kinds
+  of root carries both layouts. A packed layout gets the minimum-width
+  discriminant and a presence bit; a tagged layout gets a varint
+  discriminant and expresses optionality as tag absence, so adding an enum
+  variant in the service plane is a compatible change. The table in 5.3
   states each case. Layout stored on the enum type itself is only what a
   packed reader needs.
-- **Embedding across modes is allowed both ways.** A tagged child inside a
-  packed parent starts on a byte edge and contributes a constant to the
-  parent's `layout_hash`, so the child may evolve without breaking the
-  parent's handshake. A packed child inside a tagged parent is a
-  length-prefixed opaque payload whose hash is the child's own.
+- **A type has at most two layouts, and only the packed one has a hash.**
+  Which layouts exist is decided by reachability (`sema::modes`, C1c): a
+  message always has its declared mode's layout, plus the other mode's if
+  any message of that mode embeds it, transitively. `layout_hash` and the
+  runtime hash composition cover the packed layout only; a tagged layout is
+  self-describing and needs no handshake. A recursive type is an error in a
+  packed layout and legal in a tagged one, because the tagged shape
+  length-prefixes every field. Backends generate one codec pair per layout.
 - **The IR is a flat arena, not a tree.** Types live in one `Vec<Type>`
   indexed by `TypeId`; nesting is `parent: Option<TypeId>` and
   `nested: Vec<TypeId>` (Cap'n Proto's `Node.scopeId`). Backends that want
@@ -622,14 +675,20 @@ pub enum Type { Message(Message), Enum(Enum) }
 pub struct Message {
     id: TypeId, wire_id: u32, full_name: String, file: FileId,
     parent: Option<TypeId>, nested: Vec<TypeId>,
-    mode: Mode, layout_hash: u64,       // own laid-out fields only; composed at runtime (C5)
+    mode: Mode,                 // declared: the layout used when this message is the root
+    layout_hash: Option<u64>,   // packed layout only; own fields; composed at runtime (C5)
     fields: Vec<Field>, span: Span, doc: Option<String>,
 }
 pub struct Enum {
     id: TypeId, wire_id: u32, full_name: String, file: FileId, parent: Option<TypeId>,
     layout_hash: u64, variants: Vec<Variant>, span: Span, doc: Option<String>,
 }
-pub struct Field { name: String, index: Option<u32>, wire: WireSpec, span: Span, doc: Option<String> }
+pub struct Variant { name: String, index: Option<u32>, span: Span, doc: Option<String> }  // ordinal = position
+pub struct Field {
+    name: String, index: Option<u32>, span: Span, doc: Option<String>,
+    packed: Option<WireSpec>,   // Some on every field, or none, per message (verify)
+    tagged: Option<WireSpec>,   // Some on every field, or none; then every index is Some
+}
 pub fn verify(schema: &Schema) -> Diagnostics;
 
 // source/
@@ -638,7 +697,8 @@ pub struct SourceMap { files: Vec<(PathBuf, String)> }   // indexed by FileId; a
 // sema/model.rs   (internal; never exported)
 pub struct Model { files: Vec<FileInfo>, types: Vec<TypeDef> }   // arena; TypeId indexes into it
 pub enum TypeDef { Message(MessageDef), Enum(EnumDef) }
-pub struct MessageDef { name: FullName, file: FileId, mode: Mode, fields: Vec<FieldDef>, span: Span, doc: Option<String> }
+pub struct Modes { packed: bool, tagged: bool }   // set by sema::modes from declared mode plus reachability
+pub struct MessageDef { name: FullName, file: FileId, mode: Mode, uses: Modes, fields: Vec<FieldDef>, span: Span, doc: Option<String> }
 pub struct FieldDef { name, index: Option<u32>, ty: TypeRef, encoding: EncodingSpec, span, doc }
 pub enum TypeRef {
     Scalar(Scalar), Named(TypeId), Array { elem: Box<TypeRef>, len: ArrayLen },
@@ -647,7 +707,7 @@ pub enum TypeRef {
 }
 
 // layout/
-pub fn layout(model: &Model) -> Layout;   // per-field WireSpec, per-type layout_hash
+pub fn layout(model: &Model) -> Layout;   // per-field WireSpec per used mode, layout_hash per packed layout
 
 // lower/
 pub fn lower(model: &Model, layout: &Layout) -> ir::Schema;
@@ -670,15 +730,15 @@ message's mode:
 
 | Construct | In a `packed` message | In a `tagged` message |
 |---|---|---|
-| Enum discriminant | `Uint { bits: ceil(log2(variants)) }` | `Varint { signed: false }` |
+| Enum discriminant | `Uint { bits: max(1, ceil(log2(variants))) }` carrying the variant's ordinal | `Varint { signed: false }` carrying the variant's declared index |
 | `optional T` | `Optional { inner }`: 1 presence bit then `T` | tag absent means absent; no presence bit |
 | Array length | `LenSpec::Fixed(N)` for `[N]T`; `Prefix { bits }` or `Varint` otherwise | `LenSpec::Varint` |
-| Embedded packed message | inline, bit-exact, hash composed | length-prefixed opaque payload |
-| Embedded tagged message | pad to byte edge, then the tagged shape below; hash constant | the tagged shape below |
+| Embedded message | inline, bit-exact, the child's packed layout, hash composed | the child's tagged shape as the field payload |
 
 Tagged mode wire shape (fixed by task C6b, stated here so the sketch is
 complete). Tagged messages are byte-oriented. The message starts on a byte
-edge (a packed parent pads before it). Each present field is
+edge, which holds trivially: a tagged message is only ever a root or a field
+payload inside another tagged message. Each present field is
 `LEB128 tag, LEB128 payload length in bytes, payload padded to a byte edge`;
 the message ends with tag `0`. A reader skips an unknown tag with
 `read_bytes(len)`, and a writer buffers an embedded message as one
@@ -803,10 +863,17 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   one answer to "where is the resolved program."
 - [ ] **C1b. Add message mode to the syntax and the model.** Parser support
   for a per-message mode (the unused `encoding` keyword is the natural
-  slot), `Mode` on `MessageDef`, default `packed`. No wire change yet.
-  *Why:* the layout pass (C5) is a function of mode and the index rules (C4)
-  depend on it, so mode must exist before either; the tagged wire shape
-  itself waits for the corpus (C6b).
+  slot), `Mode` on `MessageDef`, default `packed`. The declared mode is
+  the one used when the message is the outermost one encoded (1.3). No wire
+  change yet. *Why:* the layout pass (C5) is a function of mode and the
+  index rules (C4) depend on it, so mode must exist before either; the
+  tagged wire shape itself waits for the corpus (C6b).
+- [ ] **C1c. Add the `sema::modes` pass.** Compute `uses: Modes` for every
+  message and enum: start from each message's declared mode and walk its
+  embedded types transitively, marking each with the enclosing mode; iterate
+  to a fixed point so recursive types terminate. *Why:* section 1.3 and 5.2;
+  the index check (C4) and the layout pass (C5) both need to know which
+  layouts a type has, and this is the only place that answer is computed.
 - [ ] **C2. Make lowering a plain function in its own module.**
   `lower::lower(&Model, &Layout) -> ir::Schema` with no `Lower` trait, no
   `TypeResolver`, no `LowerContext`, no `MockResolver`, no `Option` returns.
@@ -828,32 +895,37 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
 - [ ] **C3b. Add `ir::verify`.** A pure function from `&Schema` to
   `Diagnostics` that checks every `TypeId` and `FileId` is in range,
   `wire_id`s are unique, each `WireSpec` is well-formed for its position (a
-  presence-bit `Optional` inside a tagged message is an error; a
-  discriminant spec is an integer spec), tagged messages have unique indices
-  and packed ones have none, and `nested`/`parent` are consistent. Request
+  presence-bit `Optional` inside a tagged layout is an error; a
+  discriminant spec is an integer spec), every field of a message has
+  `packed` set or none does and likewise for `tagged`, a message with a
+  tagged layout has a unique index on every field, `layout_hash` is present
+  exactly when the packed layout is, and `nested`/`parent` are consistent.
+  Request
   validation (`files_to_generate` naming real files) lives in `codegen`, not
   here. Run `verify` in every IR test and in the driver before generation. *Why:* section 5.2; the
   IR is a contract shared by the reference encoder and every backend, and a
   verifier is the standard way to keep an IR honest.
-- [ ] **C4. Add the check passes.** Field indices (uniqueness; required in
-  tagged, forbidden in packed, using the mode from C1b), encoding-versus-type
+- [ ] **C4. Add the check passes.** Field indices (uniqueness; required on
+  every field of a message, and every variant of an enum, that has a tagged
+  layout per C1c; ignored otherwise), encoding-versus-type
   legality (`bits(n)` only on
   integers and within native width; `zigzag` only on signed; `varint` only on
-  integers), recursion without indirection, array length bounds, package
+  integers), recursion in a packed layout, array length bounds, package
   declared before other items. Remove the corresponding ad-hoc checks from the
   collector. *Why:* section 3.4; today nothing rejects a nonsensical
   annotation.
-- [ ] **C5. Add the layout pass.** A pure function from `Model` to per-field
-  `WireSpec` and per-type `layout_hash`, applying the per-mode table in 5.3
+- [ ] **C5. Add the layout pass.** A pure function from `Model` to a
+  per-field `WireSpec` for each mode the type uses (C1c) and a
+  `layout_hash` for each packed layout, applying the per-mode table in 5.3
   at each use site (enum discriminant, optional, array length, embedded
-  message). Define the hash precisely: every type, enums included, has one;
-  it covers the type's own laid-out `WireSpec` sequence and mode; it excludes
-  names, docs, and spans; an embedded field contributes a constant marker
-  and its position, never the referenced type's name or layout. The
-  handshake hash is composed at runtime, structurally: a packed parent mixes
-  in each packed child's composed hash in field order; a tagged child
-  contributes a fixed constant so it may evolve freely; recursive types are
-  handled with a visited set. The combine function (for example 64-bit
+  message). Define the hash precisely: every type with a packed layout,
+  enums included, has one; it covers the type's own laid-out packed
+  `WireSpec` sequence; it excludes names, docs, and spans; an embedded field
+  contributes a constant marker and its position, never the referenced
+  type's name or layout. The handshake hash is composed at runtime,
+  structurally: a packed parent mixes in each embedded child's composed hash
+  in field order, and recursion cannot occur because C4 rejects it in a
+  packed layout. The combine function (for example 64-bit
   FNV-1a over the child hashes) is specified in `docs/wire.md` and computed
   by the reference codec so the corpus checks it. This is what keeps
   per-file Godot import from going stale (section 5.2). *Why:* the IR must
@@ -864,7 +936,8 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   tagged shape from section 5.3: byte-aligned start, LEB128 tag, LEB128
   payload length in bytes, byte-padded payload, terminator tag `0`, unknown
   tags skipped with `read_bytes`. Add a conformance fixture that decodes a
-  message with an unknown field and one for each cross-mode embedding.
+  message with an unknown field and one for a type reached from both a
+  packed and a tagged root, encoded under each.
   *Why:* section 1.1; this replaces optional per-field indices with a
   coherent choice, and "skippable" is only meaningful once the skip scheme is
   written down and tested from the decode side. This task is ordered after
@@ -906,7 +979,10 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   `collect.rs`, the prefix-string dependency detection, the
   `(NativeType, WireFormat)` matching in `codec/wire.rs`, and the
   varint-for-everything defaults; map each `WireSpec` variant to exactly one
-  runtime primitive and obey it. Delete nested-package directory and
+  runtime primitive and obey it. Generate one codec pair per layout the type
+  has, named by mode (`encode_packed`, `decode_tagged`); the unsuffixed
+  `encode` and `decode` alias the declared mode so the common case reads
+  plainly. Delete nested-package directory and
   namespace generation (section 1.2). Honour `files_to_generate`. Spike the
   one-script-per-schema-file output with inner classes as the importer's own
   save file (section 5.2) and adopt it if an imported `Script` loads by its
@@ -950,14 +1026,17 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   `decode(reader, baseline)` where a field equal to the baseline costs one
   bit; `delta(range)` for integers relative to the baseline. This is the
   codec's share of delta compression; acks and history stay in the sync layer.
+  The baseline parameter exists on the packed codec only (1.3).
 - [ ] **E7. Envelope and type ids.** A generated registry mapping `wire_id`
   to codec, and an envelope message whose type id field carries `wire_id`,
   so a packet can carry heterogeneous messages. Never the arena `TypeId`,
   which renumbers on every unrelated edit (section 5.2). The registry is a
   whole-program artifact with one writer: an `EditorPlugin` action plus an
   `EditorExportPlugin._export_begin` hook in the Godot plugin, not the
-  per-file importer. The handshake for the packed plane is the registry's
-  composed hash.
+  per-file importer. The envelope is a message like any other, so its mode
+  decides which codec the registry dispatches to: a packed envelope selects
+  packed codecs and its handshake is the composed packed hash of every
+  registered type; a tagged envelope selects tagged codecs and needs none.
 - [ ] **E8. `service` declarations.** Method ids, request and response
   pairing, generated dispatch table. No transport binding.
 
@@ -1027,8 +1106,9 @@ order they matter here.
   language types. That triad is `Field`, `WireSpec`, and the host type on
   scalar leaves (5.3). The same part contrasts field-tagged extensible
   encodings with compact positional ones and recommends keeping both,
-  chosen per message. That is the packed and tagged split (1.2, 5.2) and the
-  reason cross-mode embedding is specified rather than forbidden.
+  chosen per message. That is the packed and tagged split (1.2, 5.2). The
+  same part proposes named encoding declarations separate from the data;
+  1.3 records why that is not built.
 - **3(b) Protocols. World States and Reducing Traffic.** Server state versus
   publishable state versus client state, delta compression against a
   reference base, dead reckoning as compression, and bit-level encoding as
@@ -1047,3 +1127,17 @@ and a stable IR JSON format (A2). The author's shorter "64 Network DO's and
 DON'Ts for Game Engines" series, part II "Protocols and APIs", is a condensed
 version of 3(d).
 <https://leanpub.com/development-and-deployment-of-multiplayer-online-games-vol1>
+
+### 7.3 ASN.1 (ITU-T X.680 series)
+
+Not a game reference, but the one IDL with decades of experience of several
+encodings over one type declaration, so it settles the question in 1.3.
+X.680 defines the abstract syntax with constraints in the type
+(`INTEGER (0..100)`). X.690 BER and DER are tagged, byte-oriented rules;
+X.691 unaligned PER is a positional, bit-packed rule that derives field
+widths from those constraints. The rules are chosen at the root of the
+encode call, never per type, which is the model 1.3 adopts. X.692 ECN adds
+per-field encoding control separate from the data, which is Ignatchenko's
+encoding declaration in standardised form, and its lack of adoption is the
+evidence against building it. Cap'n Proto's packed variant is the same
+root-level choice in a modern system: a transport option, not a schema one.
