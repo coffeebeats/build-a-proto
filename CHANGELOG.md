@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.2.7 (2026-09-03)
+
+## What's Changed
+* chore(deps): bump clap from 4.5.53 to 4.5.60 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/116
+* chore(deps): bump thiserror from 2.0.17 to 2.0.18 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/115
+* chore(deps): bump syn from 2.0.114 to 2.0.117 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/114
+* chore(deps): bump actions/checkout from 6.0.1 to 6.0.2 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/113
+* chore(deps): bump tempfile from 3.24.0 to 3.25.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/112
+* chore(deps): bump tj-actions/changed-files from 47.0.1 to 47.0.4 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/110
+* chore(deps): bump anyhow from 1.0.100 to 1.0.102 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/111
+* chore(deps): bump actions/cache from 4.2.3 to 5.0.3 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/108
+* chore(deps): bump assert_cmd from 2.1.2 to 2.2.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/126
+* chore(deps): bump actions/cache from 5.0.3 to 5.0.4 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/127
+* chore(deps): bump codecov/codecov-action from 5.5.2 to 6.0.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/125
+* chore(deps): bump actions/download-artifact from 7.0.0 to 8.0.1 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/123
+* chore(deps): bump tempfile from 3.25.0 to 3.27.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/121
+* chore(deps): bump actions/upload-artifact from 6.0.0 to 7.0.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/119
+* chore(deps): bump tj-actions/changed-files from 47.0.4 to 47.0.5 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/122
+* chore(deps): bump clap from 4.5.60 to 4.6.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/124
+* chore(deps): bump anyhow from 1.0.102 to 1.0.103 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/138
+* chore(deps): bump assert_cmd from 2.2.0 to 2.2.2 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/137
+* chore(deps): bump serde_json from 1.0.149 to 1.0.150 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/136
+* chore(deps): bump codecov/codecov-action from 6.0.0 to 6.0.1 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/134
+* chore(deps): bump clap from 4.6.0 to 4.6.1 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/133
+* chore(deps): bump actions/upload-artifact from 7.0.0 to 7.0.1 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/131
+* chore(deps): bump tj-actions/changed-files from 47.0.5 to 47.0.6 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/129
+* chore(deps): bump actions/cache from 5.0.4 to 5.0.5 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/128
+* chore(deps): bump googleapis/release-please-action from 4.4.0 to 5.0.0 by @dependabot[bot] in https://github.com/coffeebeats/build-a-proto/pull/130
+
+
+**Full Changelog**: https://github.com/coffeebeats/build-a-proto/compare/v0.2.6...v0.2.7
+
 ## 0.2.6 (2026-01-27)
 
 ## What's Changed
