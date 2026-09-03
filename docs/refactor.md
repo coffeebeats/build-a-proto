@@ -249,7 +249,7 @@ Observations:
 | `analyze/` | ~660 | `Analyzer` trait, two analyzers, `Diagnostic`, ariadne reporter | Keep diagnostics and reporter; move them. Analyzers become passes over the semantic model. |
 | `compile/` | ~1.1k | `Compiler` (DFS driver), `TypeCollector`, `Symbols` (scope-walking resolve), `SourceCache` | Keep the resolve algorithm. Replace the DFS driver with whole-program passes. |
 | `ir/` | ~260 data + ~3.0k lowering | IR types; `Lower` trait generic over `TypeResolver` with a `MockResolver` for tests | Redefine IR as descriptor + layout. Lowering becomes a plain function over the model. |
-| `generate/` | ~1.2k | `Generator` trait, `RustGenerator`, `ExternalGenerator`, `Language<W>`, `Writer`/`FileWriter`/`StringWriter`, `CodeWriter` | Keep `Generator` and `CodeWriter`. Delete the rest. |
+| `generate/` | ~1.2k | `Generator` trait, `RustGenerator`, `ExternalGenerator`, `Language<W>`, `Writer`/`FileWriter`/`StringWriter`, `CodeWriter` | Keep `CodeWriter` and the shape of `Generator`, which becomes a function signature (5.2). Delete the rest. |
 | `cmd/`, `main.rs` | ~120 | clap CLI (`compile --rust\|--plugin`) | Keep, thin, and repurpose: after Phase A there is no in-crate backend, so `compile` goes and the binary becomes `check`, `ir --json`, and `encode`/`decode` (task C7). |
 
 ## 3. What is unnatural, and why
@@ -377,8 +377,9 @@ re-exposes the entire CLI (`generate -o -I FILES`) because it must call
 
 The chumsky lexer and parser, the spanned AST shapes, `PackageName`
 validation, the scope-walking resolution algorithm in `Symbols::resolve`,
-ariadne reporting, `CodeWriter`, the `Generator` trait, and the Given/When/Then
-test discipline.
+ariadne reporting, `CodeWriter`, the `Generator` contract (IR in, files
+out, kept as a function signature rather than a trait, see 5.2), and the
+Given/When/Then test discipline.
 
 ## 4. Reference architectures
 
@@ -460,74 +461,116 @@ dependencies pointing only downward.
       |  load: resolve include graph from roots, assign FileId, parse ALL files first
       v
  syntax::Ast (per file, spans, unresolved names)                    syntax/
-      |  collect: every message and enum gets a TypeId, full name, file, span
-      |  resolve: every Reference becomes a TypeId (scope walk), recorded once
-      |  check:   indices, encodings vs types, cycles, mode rules, reserved
+      |  collect: every message and enum gets a TypeId and a full name (NameTable)
+      |  build:   one pass constructs the Model, resolving each reference as it goes
       v
- sema::Model (whole program, resolved, still has spans)             sema/
-      |  layout: pure function of the model and the modes each message is used in
+ sema::Model (whole program, resolved, immutable, still has spans)  sema/
+      |  modes:  which modes reach each type (ModeSet, a side table by TypeId)
+      |  check:  indices, encodings vs types, recursion, mode rules, reserved
+      |  layout: pure function of the model and the mode set
       |          -> bit widths, prefix widths, discriminant widths, presence bits,
-      |             tag widths, schema hash
+      |             tag widths, layout hash
       v
  ir::Schema (serializable, versioned, spans kept as byte ranges)    ir/ + lower/
       |  files[], types[] by TypeId with full names, wire fully specified
       v
- Generator::generate(&ir::Schema, request) -> Vec<GeneratedFile>      codegen/
+ generate(&ir::Schema, &GenerateRequest) -> Vec<GeneratedFile>       backend crate
 ```
 
 ### 5.1 Module layout
 
 ```
 src/
-  ir/            LEAF. The shared vocabulary and the contract: FileId, TypeId, Span,
-                 Mode, WireSpec, LenSpec, Schema, File, Type, Field, verify(),
-                 format_version. Depends on serde only.
+  span.rs        LEAF. FileId, Span { file, start, end }. Depends on serde only.
   source/        SourceMap (paths + text, implements ariadne Cache), ImportRoot resolution
-  diagnostics/   Diagnostic, Severity, Diagnostics (collector), ariadne emitter
+  diagnostics/   Diagnostic (severity, code, span, message), Diagnostics (collector),
+                 ariadne renderer over a SourceMap
+  ir/            The contract: TypeId, Mode, WireSpec, LenSpec, Schema, File, Type,
+                 Message, Enum, PackedLayout, TaggedLayout, verify(), format_version.
+                 Depends on span, diagnostics, and serde.
   syntax/        token.rs, lexer.rs, ast.rs, parser.rs        (today's lex/, parse/, ast/)
   sema/          model.rs   TypeDef, FieldDef, TypeRef (incl. Error), EncodingSpec
-                 collect.rs resolve.rs modes.rs (which modes reach each type)
+                 names.rs   NameTable: full name -> TypeId, scope parents
+                 build.rs   Ast + NameTable -> Model (resolves references while building)
+                 modes.rs   Model -> ModeSet (which modes reach each type)
                  check/{index,encoding,cycle,mode}.rs
-  layout/        wire.rs    Model -> ir::WireSpec per field per used mode,
-                            layout_hash per packed layout
+  layout/        wire.rs    Model + ModeSet -> ir layouts per type, hash per packed layout
   lower/         lower(&Model, &Layout) -> ir::Schema
-  codegen/       Generator trait, GeneratedFile, GenerateRequest, CodeWriter
-  driver.rs      compile(request) -> Result<ir::Schema, Diagnostics>
+  codegen/       GeneratedFile, GenerateRequest (+ its validation), CodeWriter
+  driver.rs      compile(&CompileRequest) -> Compiled { schema, sources, diagnostics }
   main.rs        CLI: check | ir --json | encode | decode
 ```
 
-Dependency rule: a DAG, not a chain. `ir` is a leaf that `sema`, `layout`,
-`lower`, and `codegen` all import for vocabulary (`TypeId`, `Mode`,
-`WireSpec`, `Span`). Above it the order is
-`source <- diagnostics <- syntax <- sema <- layout <- lower <- codegen <- driver`
-with no upward references. The earlier draft of this rule put `ir` above
-`layout` and `sema`, which cannot hold: `WireSpec::Message { ty: TypeId }`
-places a type id inside the serialized contract, the `check` pass needs
-`Mode`, and a generator that reports an error needs a `Span`. Making `ir` the
-leaf resolves all three and keeps the public API free of `sema` (task C7).
-`TypeKind` lives in `sema`.
+Dependency rule: a DAG, not a chain, in this order with no upward references:
+`span <- source <- diagnostics <- ir <- syntax <- sema <- layout <- lower <- codegen <- driver`.
+`span` is the leaf, as `rustc_span` is for rustc and the `span` crate is for
+rust-analyzer: every layer, the lexer and the serialized IR included, shares
+one location type without the lexer importing it from the contract module.
+`ir` sits directly above `diagnostics` because `verify` returns
+`Diagnostics`; an earlier draft made `ir` the leaf and declared it
+serde-only, which that signature contradicts. `ir` still sits below
+`sema` because `WireSpec::Message { ty: TypeId }` places a type id inside
+the serialized contract and the `check` pass needs `Mode`, and this keeps
+the public API free of `sema` (task C7). `TypeKind` lives in `sema`.
+
+Nothing inside one crate enforces this order; only a crate boundary does.
+The crate stays single at this size. If the rule is ever broken in review,
+the first split is `span` plus `ir` into a serde-only `baproto-ir` crate,
+which is also the crate a backend would depend on for fixtures without the
+compiler. It is listed under the deferred items.
 
 ### 5.2 Design decisions
 
 - **Whole-program passes replace the per-file DFS.** The driver loads every
-  file reachable from the inputs, then runs collect, resolve, check, layout,
-  and lower over all of them. Cross-file references and include cycles stop
-  being special cases.
-- **Every pass returns diagnostics, never `Option`.** Collect, resolve, and
+  file reachable from the inputs, then runs collect, build, modes, check,
+  layout, and lower over all of them. Cross-file references and include
+  cycles stop being special cases.
+- **Every pass returns diagnostics, never `Option`.** Collect, build, and
   check append to one `Diagnostics` collector. Lowering runs only on a clean
   model and cannot fail. This is protoc's pool-build contract.
-- **The model is the only place resolution lives.** `TypeRef::Named(TypeId)`
-  is set once by the resolve pass. Checks, layout, lowering, and generators all
-  read it.
-- **The IR is descriptor plus layout, and it is versioned.** Each field carries
-  a `WireSpec` that says exactly what goes on the wire. Each message carries
-  its mode and schema hash. A backend that emits anything the IR did not
+- **The model is built once and never mutated.** Collect produces only a
+  `NameTable` (full name to `TypeId`, plus each scope's parent). One build
+  pass then constructs the `Model` from the AST and resolves every reference
+  as it converts it, so `TypeRef` is `Named(TypeId)` or `Error` from the
+  moment it exists and has no unresolved state. Facts derived later, such
+  as which modes reach a type, are returned as side tables indexed by
+  `TypeId` (`ModeSet`) and passed to the passes that need them, never
+  written back into the model. This is rustc's shape (name resolution
+  produces `Res`, lowering consumes it, everything else is a map keyed by
+  id) and rust-analyzer's (`hir` is "a static, fully resolved view"). It
+  removes the "which pass has run" question from every later pass, and it
+  keeps each pass a pure function of immutable inputs, which is what a
+  query system would need if one were ever wanted.
+- **The name table is keyed by one dotted full name.** protoc's pool keeps
+  a flat `symbols_by_name` map and resolves a relative name by trying the
+  enclosing scope's full name plus the reference, then stripping one
+  trailing component at a time. With a single string key the package
+  boundary is not part of the key, so the "try every package split" loop of
+  section 3.6 disappears. `Descriptor` is retired; `FullName` is a display
+  and key type only.
+- **The IR is descriptor plus layout, and it is versioned.** Each layout a
+  type has carries a `WireSpec` per field that says exactly what goes on
+  the wire, and each packed layout carries its hash. Each message carries
+  its declared mode. A backend that emits anything the IR did not
   specify is a backend bug. This is the property the conformance corpus
   depends on. It is Cap'n Proto's `StructLayout` idea applied to bit streams.
-- **Generation is in-process, library-first.** `baproto::compile` returns an
-  IR and the Godot binary stays a thin `Generator` over it, which is what it
-  already is. When a non-Rust backend arrives, the serialized IR plus
-  `format_version` is already the contract.
+- **Generation is in-process, library-first, and a backend is a function.**
+  `baproto::compile` returns an IR and the Godot binary stays a thin
+  translation over it, which is what it already is. The `Generator` trait
+  goes: it has one implementor, in another crate, and after Phase A nothing
+  in this crate dispatches over it, so it is ceremony (rust-analyzer's
+  style guide calls these "doer objects"). The crate exports the shapes a
+  backend consumes and produces, `GenerateRequest` and `GeneratedFile`, and
+  a backend is `fn generate(&ir::Schema, &GenerateRequest) ->
+  Result<Vec<GeneratedFile>, Diagnostics>` with typed configuration held by
+  whatever owns that function. When a non-Rust backend arrives, the
+  serialized IR plus `format_version` is already the contract.
+- **The public result carries warnings.** `compile` returns
+  `Compiled { schema: Option<ir::Schema>, sources: SourceMap, diagnostics }`
+  rather than `Result<_, Diagnostics>`: a `Result` drops every diagnostic on
+  success, and the E3 raw-float check is a warning that must reach the
+  Godot importer on a successful compile. `schema` is `Some` exactly when
+  `diagnostics` has no error.
 - **`WireSpec` is a closed instruction set, is self-sufficient, and is the
   only type tree on a field.** A backend must be able to pick the runtime
   primitive from the `WireSpec` alone. `f32` and `u32` must not both be "32
@@ -542,7 +585,13 @@ leaf resolves all three and keeps the public API free of `sema` (task C7).
   Composite features (`smallest_three`, baseline-relative fields) are
   expressed in existing variants where possible; a genuinely new variant
   requires a new runtime primitive and a conformance fixture. Enums are
-  C-like; there is no per-variant payload.
+  C-like; there is no per-variant payload. No variant states a fact twice:
+  a float's width is its host type, a varint's signedness is its host
+  type's, and a `Message` or `Enum` leaf names the type and nothing else,
+  because every duplicated fact is one more verifier rule and one more way
+  for a backend to read the wrong copy. `WireSpec` is deliberately not
+  `#[non_exhaustive]`: a backend must fail to compile when a variant is
+  added, since a new variant means a new runtime primitive.
 - **Mode decides layout at the use site, not on the type.** A message
   declares the mode it uses as a root; everything embedded in it takes the
   enclosing mode (1.3). So the wire form of an enum discriminant, an
@@ -552,8 +601,10 @@ leaf resolves all three and keeps the public API free of `sema` (task C7).
   discriminant and a presence bit; a tagged layout gets a varint
   discriminant and expresses optionality as tag absence, so adding an enum
   variant in the service plane is a compatible change. The table in 5.3
-  states each case. Layout stored on the enum type itself is only what a
-  packed reader needs.
+  states each case. An enum's discriminant is stored on the enum's own
+  layouts, not repeated at every field that uses it: a field's
+  `WireSpec::Enum { ty }` means "call that type's codec for the layout
+  being generated", exactly as `Message { ty }` does.
 - **A type has at most two layouts, and only the packed one has a hash.**
   Which layouts exist is decided by reachability (`sema::modes`, C1c): a
   message always has its declared mode's layout, plus the other mode's if
@@ -562,35 +613,79 @@ leaf resolves all three and keeps the public API free of `sema` (task C7).
   self-describing and needs no handshake. A recursive type is an error in a
   packed layout and legal in a tagged one, because the tagged shape
   length-prefixes every field. Backends generate one codec pair per layout.
+- **Layouts hang on the type, not on the field.** A message is
+  `fields: Vec<Field>` (declarations: name, span, doc) plus
+  `packed: Option<PackedLayout>` and `tagged: Option<TaggedLayout>`, each a
+  vector of wire specs aligned with `fields`. The packed layout owns the
+  hash; the tagged layout owns the index of every field as a plain `u32`.
+  An enum has the same pair. An earlier draft put `packed: Option<WireSpec>`
+  and `tagged: Option<WireSpec>` on every field with `layout_hash` and
+  `index` as further `Option`s, and needed four verifier rules to say
+  "all or none per message", "hash present iff packed", "every index
+  present iff tagged", and "an enum used only from tagged roots has no
+  hash". A per-message fact encoded per field is the pattern the API
+  guidelines call conveying meaning "through types, not bool or Option";
+  hoisting it makes three of the four rules structural and leaves the
+  verifier checking lengths and that the declared layout is present. A
+  backend's "one codec pair per layout" becomes a loop over two options.
 - **The IR is a flat arena, not a tree.** Types live in one `Vec<Type>`
   indexed by `TypeId`; nesting is `parent: Option<TypeId>` and
-  `nested: Vec<TypeId>` (Cap'n Proto's `Node.scopeId`). Backends that want
-  one file per type flatten for free; backends that want inner classes walk
-  `nested`. The GDScript `collect.rs` and the prefix-string hack disappear.
+  `nested: Vec<TypeId>` (Cap'n Proto's `Node.scopeId`). `Type` is one
+  header shared by messages and enums (wire id, full name, file, parent,
+  span, doc) plus a `body` enum, as Cap'n Proto's `Node` is a common header
+  plus a union, so a consumer reads the header without matching. Backends
+  that want one file per type flatten for free; backends that want inner
+  classes walk `nested`. The GDScript `collect.rs` and the prefix-string
+  hack disappear.
 - **The IR carries source locations, and there is one location type.**
   protoc keeps `SourceCodeInfo`, capnpc keeps `sourceInfo`. Backends produce
   real errors (a Godot `int` is 64-bit signed, so `u64` cannot round-trip)
   and the Godot importer shows compiler output to the user. Each type and
   field carries the same `Span { file: FileId, start, end }` the compiler
   uses; byte offsets are serializable and cheap, and line and column are the
-  renderer's job. `Generator` returns `Diagnostics` with `Span`s, not
-  `anyhow` strings, and the same renderer prints them.
+  renderer's job. A backend returns `Diagnostics` with `Span`s, not
+  `anyhow` strings, and the same renderer prints them. Each `Diagnostic`
+  also carries a short stable code (`E0007`-style or a snake-case name) so
+  tests assert on the code rather than on prose.
 - **Stable ids for the wire are not arena indexes.** `TypeId` is an arena
   index assigned by file order then declaration order, so inserting one type
   renumbers every type after it. Anything that goes on the wire (the E7
   envelope, the registry) uses `wire_id: u32`, a hash of the full name (or a
   declared id later), stored next to `TypeId` and checked unique by the
-  verifier. Cap'n Proto assigns 64-bit ids for exactly this reason.
-- **Passes tolerate a dirty model.** Resolve and check run after collect has
+  verifier. Cap'n Proto assigns 64-bit ids for exactly this reason, and
+  rustc keeps a `DefPathHash` that is stable across sessions next to the
+  `DefId` that is not.
+- **Every hash is computed over bytes the specification defines.** Neither
+  `layout_hash` nor `wire_id` may come from `#[derive(Hash)]` or
+  `DefaultHasher`: `std::hash` output is not stable across Rust releases,
+  and the GDScript runtime and any other peer must reproduce both values.
+  `docs/wire.md` defines the canonical byte encoding of a packed layout
+  (the wire spec sequence, no names, docs, or spans) and of a full name,
+  and names the hash function over those bytes (64-bit FNV-1a for the
+  layout, 32-bit FNV-1a for the wire id, unless the corpus work finds a
+  reason to change). The reference codec computes both so the corpus
+  checks them.
+- **Passes tolerate a dirty model.** Build and check run after collect has
   reported errors, so the user sees every error in one compile. An
-  unresolvable reference becomes `TypeRef::Error` (rustc's `TyKind::Error`)
-  and later checks never report on an `Error` reference, which stops
-  cascades. Lowering still runs only on a clean model.
-- **There is an IR verifier.** LLVM has `Verifier`, rustc validates MIR. An
+  unresolvable reference becomes `TypeRef::Error` (rustc's `Res::Err`) and
+  later checks never report on an `Error` reference, which stops cascades.
+  Lowering still runs only on a clean model.
+- **There is an IR verifier, and it checks what the types cannot.** LLVM
+  has `Verifier`, rustc validates MIR at each phase. An
   `ir::verify(&Schema) -> Diagnostics` checks id ranges, `wire_id`
-  uniqueness, that each `WireSpec` is well-formed for its position and mode,
-  mode rules, and index rules. It runs in tests and before generation. It is cheap and protects every backend and the reference
-  encoder.
+  uniqueness, that each `WireSpec` is well-formed for its position and
+  layout (a presence-bit `Optional` in a tagged layout is an error), that
+  every `Message { ty }` and `Enum { ty }` inside a packed layout names a
+  type that has a packed layout and likewise for tagged, that layout
+  vectors match their declarations in length, that the declared layout is
+  present, and that `nested`/`parent` agree. It runs in tests and before
+  generation. It is cheap and protects every backend and the reference
+  encoder. The rule for the split between types and verifier is
+  rust-analyzer's: a field is public when any value is valid, and an
+  invariant the type cannot carry is documented and verified. IR structs
+  therefore have public fields, which deviates from the API guideline that
+  prefers private fields, and the ids and `Span` are newtypes with
+  constructors.
 - **Everything is deterministic.** `TypeId`s are assigned by input-file order
   then declaration order; output collections are ordered (`BTreeMap` or
   `Vec`). Godot reimports on every save, so unstable output means spurious
@@ -643,81 +738,111 @@ leaf resolves all three and keeps the public API free of `sema` (task C7).
 These are shapes, not final signatures. Names are suggestions.
 
 ```rust
-// ir/   (leaf; serde; the contract and the shared vocabulary)
-pub struct FileId(u32);
-pub struct TypeId(u32);
-pub struct Span { file: FileId, start: u32, end: u32 }
+// span.rs   (leaf; serde)
+pub struct FileId(u32);                                     // Copy, Ord, Hash; constructor only
+pub struct Span { file: FileId, start: u32, end: u32 }      // byte offsets
+
+// diagnostics/
+pub struct Diagnostic { severity: Severity, code: &'static str, span: Span, message: String }
+pub struct Diagnostics { items: Vec<Diagnostic> }           // error(code, span, msg), warn(..), has_errors()
+
+// ir/   (the contract; serde; every type derives Debug, Clone, PartialEq, Eq, Hash)
+pub struct TypeId(u32);                                     // Copy, Ord, Hash; indexes Model and Schema
 pub enum Mode { Packed, Tagged }
 pub enum IntType { U8, U16, U32, U64, I8, I16, I32, I64 }
 pub enum FloatType { F32, F64 }
+pub struct Real(u64);                                       // f64 as its bit pattern, so Eq and Hash derive
 
-// one variant == one runtime primitive; self-sufficient; the only tree on a field (5.2)
+// one variant == one runtime primitive; self-sufficient; no fact stated twice (5.2)
 pub enum WireSpec {
     Bool,                                                   // 1 bit
-    Uint { bits: u32, host: IntType },                      // fixed width, unsigned
+    Uint { bits: u32, host: IntType },                      // fixed width, unsigned; bits <= host width
     Int { bits: u32, host: IntType },                       // fixed width, two's complement
     ZigZag { bits: u32, host: IntType },                    // fixed width, zigzag-mapped
-    Varint { signed: bool, host: IntType },                 // LEB128, zigzag if signed
-    Float { bits: u32, host: FloatType },                   // 32 or 64, IEEE bit pattern
-    Quantized { min: f64, max: f64, bits: u32, host: FloatType },
+    Varint { host: IntType },                               // LEB128; zigzag iff host is signed
+    Float(FloatType),                                       // IEEE bit pattern, width from host
+    Quantized { min: Real, max: Real, bits: u32, host: FloatType },
     Bytes { len: LenSpec },                                 // raw bytes
     Utf8 { len: LenSpec },                                  // string
     Array { len: LenSpec, elem: Box<WireSpec> },
-    Optional { inner: Box<WireSpec> },                      // 1 presence bit (packed only; see table)
-    Message { ty: TypeId },                                 // call that type's codec
-    Enum { ty: TypeId, discriminant: Box<WireSpec> },       // discriminant chosen by the enclosing mode
+    Optional { inner: Box<WireSpec> },                      // 1 presence bit (packed layouts only; verify)
+    Message { ty: TypeId },                                 // call that type's codec for this layout
+    Enum { ty: TypeId },                                    // same; discriminant lives on the enum's layout
 }
 pub enum LenSpec { Fixed(u32), Prefix { bits: u32 }, Varint }
 
-pub struct Schema { format_version: u32, files: Vec<File>, types: Vec<Type> }
-pub struct File { id: FileId, path: String, package: String, includes: Vec<FileId>, types: Vec<TypeId> }
-pub enum Type { Message(Message), Enum(Enum) }
+pub struct Schema { format_version: u32, files: Vec<File>, types: Vec<Type> }   // impl Index<FileId>, Index<TypeId>
+pub struct File { path: String, package: String, includes: Vec<FileId>, types: Vec<TypeId> }
+pub struct Type {                                           // one header, as Cap'n Proto's Node
+    wire_id: u32, full_name: String, file: FileId, parent: Option<TypeId>,
+    span: Span, doc: Option<String>, body: TypeBody,
+}
+pub enum TypeBody { Message(Message), Enum(Enum) }
 pub struct Message {
-    id: TypeId, wire_id: u32, full_name: String, file: FileId,
-    parent: Option<TypeId>, nested: Vec<TypeId>,
-    mode: Mode,                 // declared: the layout used when this message is the root
-    layout_hash: Option<u64>,   // packed layout only; own fields; composed at runtime (C5)
-    fields: Vec<Field>, span: Span, doc: Option<String>,
+    mode: Mode,                                             // declared: the layout used when this message is the root
+    nested: Vec<TypeId>,
+    fields: Vec<Field>,                                     // declarations only
+    packed: Option<PackedLayout>,                           // present iff a packed root reaches this type
+    tagged: Option<TaggedLayout>,                           // present iff a tagged root reaches this type
 }
+pub struct Field { name: String, span: Span, doc: Option<String> }
+pub struct PackedLayout { hash: u64, fields: Vec<WireSpec> }                 // aligned with `fields`; hash is the layout_hash of 5.2
+pub struct TaggedLayout { fields: Vec<TaggedField> }                         // aligned with `fields`
+pub struct TaggedField { index: u32, spec: WireSpec }
 pub struct Enum {
-    id: TypeId, wire_id: u32, full_name: String, file: FileId, parent: Option<TypeId>,
-    layout_hash: u64, variants: Vec<Variant>, span: Span, doc: Option<String>,
+    variants: Vec<Variant>,                                 // ordinal = position
+    packed: Option<PackedEnumLayout>,
+    tagged: Option<TaggedEnumLayout>,
 }
-pub struct Variant { name: String, index: Option<u32>, span: Span, doc: Option<String> }  // ordinal = position
-pub struct Field {
-    name: String, index: Option<u32>, span: Span, doc: Option<String>,
-    packed: Option<WireSpec>,   // Some on every field, or none, per message (verify)
-    tagged: Option<WireSpec>,   // Some on every field, or none; then every index is Some
-}
+pub struct Variant { name: String, span: Span, doc: Option<String> }
+pub struct PackedEnumLayout { hash: u64, bits: u32 }                          // Uint { bits } carrying the ordinal
+pub struct TaggedEnumLayout { indices: Vec<u32> }                             // Varint carrying the declared index
 pub fn verify(schema: &Schema) -> Diagnostics;
 
 // source/
 pub struct SourceMap { files: Vec<(PathBuf, String)> }   // indexed by FileId; ariadne Cache
 
-// sema/model.rs   (internal; never exported)
-pub struct Model { files: Vec<FileInfo>, types: Vec<TypeDef> }   // arena; TypeId indexes into it
+// sema/   (internal; never exported)
+pub struct NameTable { by_name: BTreeMap<FullName, TypeId>, parent_scope: Vec<Option<TypeId>> }
+pub fn collect(asts: &[(FileId, Ast)], diags: &mut Diagnostics) -> NameTable;
+pub fn build(asts: &[(FileId, Ast)], names: &NameTable, diags: &mut Diagnostics) -> Model;   // resolves as it builds
+pub struct Model { files: Vec<FileInfo>, types: Vec<TypeDef> }   // arena; TypeId indexes into it; immutable after build
 pub enum TypeDef { Message(MessageDef), Enum(EnumDef) }
-pub struct Modes { packed: bool, tagged: bool }   // set by sema::modes from declared mode plus reachability
-pub struct MessageDef { name: FullName, file: FileId, mode: Mode, uses: Modes, fields: Vec<FieldDef>, span: Span, doc: Option<String> }
+pub struct MessageDef { name: FullName, file: FileId, mode: Mode, fields: Vec<FieldDef>, span: Span, doc: Option<String> }
 pub struct FieldDef { name, index: Option<u32>, ty: TypeRef, encoding: EncodingSpec, span, doc }
 pub enum TypeRef {
     Scalar(Scalar), Named(TypeId), Array { elem: Box<TypeRef>, len: ArrayLen },
-    Error,                            // set by resolve on failure; checks skip it
+    Error,                            // build reports the failure and leaves this; checks skip it
     /* later: Optional, Vec3, Quat */
 }
+pub struct Modes { packed: bool, tagged: bool }             // at least one is true (constructor)
+pub struct ModeSet(Vec<Modes>);                             // side table indexed by TypeId
+pub fn modes(model: &Model) -> ModeSet;                     // declared mode plus reachability, to a fixed point
+pub fn check(model: &Model, modes: &ModeSet, diags: &mut Diagnostics);
 
 // layout/
-pub fn layout(model: &Model) -> Layout;   // per-field WireSpec per used mode, layout_hash per packed layout
+pub fn layout(model: &Model, modes: &ModeSet) -> Layout;    // ir layouts per type per used mode; hash per packed layout
 
 // lower/
 pub fn lower(model: &Model, layout: &Layout) -> ir::Schema;
 
 // codegen/
 pub struct GenerateRequest { files_to_generate: Vec<FileId> }
-pub trait Generator {
-    fn generate(&self, schema: &ir::Schema, req: &GenerateRequest) -> Result<Vec<GeneratedFile>, Diagnostics>;
-}
+pub struct GeneratedFile { path: PathBuf, contents: String }
+// a backend is: fn generate(&ir::Schema, &GenerateRequest) -> Result<Vec<GeneratedFile>, Diagnostics>
+
+// driver.rs
+pub struct CompileRequest { files: Vec<PathBuf>, import_roots: Vec<ImportRoot> }
+pub struct Compiled { schema: Option<ir::Schema>, sources: SourceMap, diagnostics: Diagnostics }
+pub fn compile(req: &CompileRequest) -> Compiled;           // schema is Some iff no error
 ```
+
+Id newtypes are hand-rolled with a small macro rather than taken from
+`la-arena`: its `Idx<T>` is typed per element, and one `TypeId` indexes
+both `Model.types` and `Schema.types`, which is the point of lowering being
+one-to-one. Storing an id inside the element it indexes (`Message.id`) is
+omitted for the same reason cranelift's `PrimaryMap` and la-arena omit it:
+it is one more fact to verify. The JSON form may add it for readability.
 
 `EncodingSpec` in `sema` is what the user wrote (`bits(12)`, `zigzag`,
 `range(0, 100)`); `WireSpec` in `ir` is what the layout pass derived from it
@@ -730,7 +855,7 @@ message's mode:
 
 | Construct | In a `packed` message | In a `tagged` message |
 |---|---|---|
-| Enum discriminant | `Uint { bits: max(1, ceil(log2(variants))) }` carrying the variant's ordinal | `Varint { signed: false }` carrying the variant's declared index |
+| Enum discriminant (on the enum's own layout; the field says `Enum { ty }`) | `PackedEnumLayout { bits: max(1, ceil(log2(variants))) }`: fixed width carrying the variant's ordinal | `TaggedEnumLayout { indices }`: unsigned varint carrying the variant's declared index |
 | `optional T` | `Optional { inner }`: 1 presence bit then `T` | tag absent means absent; no presence bit |
 | Array length | `LenSpec::Fixed(N)` for `[N]T`; `Prefix { bits }` or `Varint` otherwise | `LenSpec::Varint` |
 | Embedded message | inline, bit-exact, the child's packed layout, hash composed | the child's tagged shape as the field payload |
@@ -824,7 +949,7 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   before the IR changes so D2 has a safety net.
 - [ ] **B1. Introduce `FileId` and `SourceMap`; make `Span` a value type.**
   Replace `SimpleSpan<usize, SchemaImport>` with `Span { file: FileId, start, end }`.
-  `FileId` and `Span` are defined in the leaf `ir` module (5.1) so every
+  `FileId` and `Span` are defined in the leaf `span` module (5.1) so every
   layer, the serialized IR included, shares one location type. `SourceMap`
   owns paths and text and implements ariadne's `Cache`. Keep `ImportRoot`
   resolution. *Why:* spans currently clone an `Rc<PathBuf>`;
@@ -832,10 +957,11 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   other. This also removes `SchemaImport` from the lexer's type signatures.
 - [ ] **B2. Create a `diagnostics` module.** Move `Diagnostic`, `Severity`,
   and the ariadne reporter there; add a `Diagnostics` collector with
-  `error(span, msg)` and `has_errors()`. Have lex and parse convert chumsky
-  `Rich` errors into `Diagnostic` at their own boundary rather than in the
-  compiler. *Why:* one place to accumulate and report; breaks the
-  `analyze <-> compile` cycle.
+  `error(code, span, msg)`, `warn(code, span, msg)`, and `has_errors()`,
+  where `code` is a short stable identifier that tests match on (5.2).
+  Have lex and parse convert chumsky `Rich` errors into `Diagnostic` at
+  their own boundary rather than in the compiler. *Why:* one place to
+  accumulate and report; breaks the `analyze <-> compile` cycle.
 - [ ] **B3a. Merge `lex/`, `parse/`, `ast/` into `syntax/`.** Pure move; keep
   file granularity inside; no behaviour change. *Why:* the three modules are
   one layer.
@@ -852,15 +978,22 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
 
 ### Phase C: introduce the semantic model
 
-- [ ] **C1. Add `sema::Model` and the collect/resolve passes.** Define
-  `TypeId`, `TypeDef`, `FieldDef`, `TypeRef` (section 5.3). Move `Symbols` and
-  its scope-walking `resolve` into `sema::resolve`. Collect assigns ids and
-  full names; resolve rewrites every `Reference` to `TypeRef::Named(TypeId)`
-  and reports unresolved or wrong-kind references, leaving `TypeRef::Error`
-  behind so later passes run without cascading errors. `TypeKind` moves
-  here. Retire `Descriptor` as a mutable scope cursor; keep a `FullName`
-  display type. *Why:* sections 3.2, 3.3, 3.6. After this there is exactly
-  one answer to "where is the resolved program."
+- [ ] **C1. Add `sema::Model` and the collect and build passes.** Define
+  `TypeId`, `TypeDef`, `FieldDef`, `TypeRef` (section 5.3). Collect walks
+  the ASTs, assigns ids in file then declaration order, and produces a
+  `NameTable` keyed by dotted full name with each scope's parent. Build
+  constructs the `Model` from the ASTs in one pass and resolves each
+  `Reference` as it converts the field, using the scope-walking algorithm
+  from `Symbols::resolve` rewritten over the new key (try the enclosing
+  scope's full name plus the reference, then strip one trailing component
+  at a time; an absolute reference is looked up directly). An unresolved or
+  wrong-kind reference is reported and left as `TypeRef::Error` so later
+  passes run without cascading errors; `TypeRef` has no unresolved variant
+  and the model is never mutated after build. `TypeKind` moves here.
+  Retire `Descriptor`; keep `FullName` as a display and key type. *Why:*
+  sections 3.2, 3.3, 3.6, and 5.2. After this there is exactly one answer
+  to "where is the resolved program", and no pass has to ask whether
+  resolution has run.
 - [ ] **C1b. Add message mode to the syntax and the model.** Parser support
   for a per-message mode (the unused `encoding` keyword is the natural
   slot), `Mode` on `MessageDef`, default `packed`. The declared mode is
@@ -868,69 +1001,84 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   change yet. *Why:* the layout pass (C5) is a function of mode and the
   index rules (C4) depend on it, so mode must exist before either; the
   tagged wire shape itself waits for the corpus (C6b).
-- [ ] **C1c. Add the `sema::modes` pass.** Compute `uses: Modes` for every
-  message and enum: start from each message's declared mode and walk its
-  embedded types transitively, marking each with the enclosing mode; iterate
-  to a fixed point so recursive types terminate. *Why:* section 1.3 and 5.2;
-  the index check (C4) and the layout pass (C5) both need to know which
-  layouts a type has, and this is the only place that answer is computed.
+- [ ] **C1c. Add the `sema::modes` pass.** `modes(&Model) -> ModeSet`, a
+  side table indexed by `TypeId` holding `Modes { packed, tagged }` for
+  every message and enum: start from each message's declared mode and walk
+  its embedded types transitively, marking each with the enclosing mode;
+  iterate to a fixed point so recursive types terminate. The result is
+  passed to check and layout, not written into the model. *Why:* section
+  1.3 and 5.2; the index check (C4) and the layout pass (C5) both need to
+  know which layouts a type has, and this is the only place that answer is
+  computed.
 - [ ] **C2. Make lowering a plain function in its own module.**
   `lower::lower(&Model, &Layout) -> ir::Schema` with no `Lower` trait, no
   `TypeResolver`, no `LowerContext`, no `MockResolver`, no `Option` returns.
-  `lower/` sits above `sema` and `layout`; the `ir` types it builds live in
-  the leaf module and depend on nothing (5.1). Port the lowering unit tests to build a
-  small `Model` directly. *Why:* section 3.10; lowering must not be able to
-  drop fields silently.
+  `lower/` sits above `sema` and `layout`; the `ir` types it builds sit
+  below all three (5.1). Port the lowering unit tests to build a small
+  `Model` directly. *Why:* section 3.10; lowering must not be able to drop
+  fields silently.
 - [ ] **C3. Redefine the IR as descriptor plus layout.** Add `format_version`,
   a `files` list keyed by `FileId`, a flat `types` arena indexed by `TypeId`
-  with `parent`/`nested` links, `full_name`, `wire_id`, and a `Span` on every
-  type and field. Replace `WireFormat`/`Transform`/`padding_bits`/`NativeType`
+  whose elements are one `Type` header (`wire_id`, `full_name`, `file`,
+  `parent`, `span`, `doc`) plus a `TypeBody`, with `nested` links on
+  messages. Replace `WireFormat`/`Transform`/`padding_bits`/`NativeType`
   with the single `WireSpec` tree of section 5.3, whose scalar leaves carry
-  the host type and whose `Enum` variant carries its discriminant spec.
-  Remove maps (arrays of pair messages are the wire; see 1.2). Assign
-  `TypeId`s deterministically (file order, then declaration order) and use
-  ordered collections everywhere. *Why:* sections 3.3 and 5.2; this is the
-  contract the conformance corpus and every backend depend on. Bump the
-  format version whenever it changes.
+  the host type and state no fact twice. Put layouts on the type:
+  `Message { fields, packed: Option<PackedLayout>, tagged: Option<TaggedLayout> }`
+  and the enum equivalents, with the hash inside the packed layout and the
+  field indices inside the tagged one. Remove maps (arrays of pair messages
+  are the wire; see 1.2). Assign `TypeId`s deterministically (file order,
+  then declaration order), implement `Index<TypeId>` and `Index<FileId>` on
+  `Schema`, derive `Debug, Clone, PartialEq, Eq, Hash, Serialize,
+  Deserialize` on every IR type (`Copy, Ord` on ids; `Real` wraps a float's
+  bit pattern so the derives hold), keep `#[serde(tag = "kind")]` on
+  enums, and use ordered collections everywhere. *Why:* sections 3.3 and
+  5.2; this is the contract the conformance corpus and every backend
+  depend on. Bump the format version whenever it changes.
 - [ ] **C3b. Add `ir::verify`.** A pure function from `&Schema` to
   `Diagnostics` that checks every `TypeId` and `FileId` is in range,
-  `wire_id`s are unique, each `WireSpec` is well-formed for its position (a
-  presence-bit `Optional` inside a tagged layout is an error; a
-  discriminant spec is an integer spec), every field of a message has
-  `packed` set or none does and likewise for `tagged`, a message with a
-  tagged layout has a unique index on every field, `layout_hash` is present
-  exactly when the packed layout is, and `nested`/`parent` are consistent.
-  Request
-  validation (`files_to_generate` naming real files) lives in `codegen`, not
-  here. Run `verify` in every IR test and in the driver before generation. *Why:* section 5.2; the
-  IR is a contract shared by the reference encoder and every backend, and a
-  verifier is the standard way to keep an IR honest.
-- [ ] **C4. Add the check passes.** Field indices (uniqueness; required on
-  every field of a message, and every variant of an enum, that has a tagged
-  layout per C1c; ignored otherwise), encoding-versus-type
-  legality (`bits(n)` only on
-  integers and within native width; `zigzag` only on signed; `varint` only on
-  integers), recursion in a packed layout, array length bounds, package
-  declared before other items. Remove the corresponding ad-hoc checks from the
-  collector. *Why:* section 3.4; today nothing rejects a nonsensical
+  `wire_id`s are unique, each `WireSpec` is well-formed for its position
+  and layout (a presence-bit `Optional` inside a tagged layout is an
+  error; `bits` never exceeds the host width), every `Message { ty }` and
+  `Enum { ty }` inside a packed layout names a type with a packed layout
+  and likewise for tagged, each layout's vector has the same length as its
+  declarations, a tagged layout's indices are unique, the declared mode's
+  layout is present, and `nested`/`parent` agree. Request validation
+  (`files_to_generate` naming real files) lives in `codegen`, not here.
+  Run `verify` in every IR test and in the driver before generation.
+  *Why:* section 5.2; the IR is a contract shared by the reference encoder
+  and every backend, and a verifier is the standard way to keep an IR
+  honest about the invariants its types cannot carry.
+- [ ] **C4. Add the check passes.** `check(&Model, &ModeSet, &mut
+  Diagnostics)`, run after C1c because several rules depend on which
+  layouts a type has. Field indices (uniqueness; required on every field
+  of a message, and every variant of an enum, that has a tagged layout;
+  ignored otherwise), encoding-versus-type legality (`bits(n)` only on
+  integers and within native width; `zigzag` only on signed; `varint` only
+  on integers), recursion in a packed layout, array length bounds, package
+  declared before other items. Remove the corresponding ad-hoc checks from
+  the collector. *Why:* section 3.4; today nothing rejects a nonsensical
   annotation.
-- [ ] **C5. Add the layout pass.** A pure function from `Model` to a
-  per-field `WireSpec` for each mode the type uses (C1c) and a
-  `layout_hash` for each packed layout, applying the per-mode table in 5.3
-  at each use site (enum discriminant, optional, array length, embedded
-  message). Define the hash precisely: every type with a packed layout,
-  enums included, has one; it covers the type's own laid-out packed
-  `WireSpec` sequence; it excludes names, docs, and spans; an embedded field
-  contributes a constant marker and its position, never the referenced
-  type's name or layout. The handshake hash is composed at runtime,
-  structurally: a packed parent mixes in each embedded child's composed hash
-  in field order, and recursion cannot occur because C4 rejects it in a
-  packed layout. The combine function (for example 64-bit
-  FNV-1a over the child hashes) is specified in `docs/wire.md` and computed
-  by the reference codec so the corpus checks it. This is what keeps
-  per-file Godot import from going stale (section 5.2). *Why:* the IR must
-  state what the backend emits; the hash is the handshake guard for packed
-  mode, and peers in different languages must compute the same value.
+- [ ] **C5. Add the layout pass.** `layout(&Model, &ModeSet) -> Layout`, a
+  pure function producing, for each type and each mode that reaches it,
+  the `ir` layout of section 5.3 (a `WireSpec` per field, the enum
+  discriminant width or index list, the hash for each packed layout),
+  applying the per-mode table at each use site (optional, array length,
+  embedded message and enum). Define the hash precisely: every type with a
+  packed layout, enums included, has one; it is computed over the
+  canonical byte encoding of the type's own packed layout that
+  `docs/wire.md` defines, never over Rust's `Hash` (5.2); it excludes
+  names, docs, and spans; an embedded field contributes a constant marker
+  and its position, never the referenced type's name or layout. The
+  handshake hash is composed at runtime, structurally: a packed parent
+  mixes in each embedded child's composed hash in field order, and
+  recursion cannot occur because C4 rejects it in a packed layout. The
+  combine function (for example 64-bit FNV-1a over the child hashes) is
+  specified in `docs/wire.md` and computed by the reference codec so the
+  corpus checks it. This is what keeps per-file Godot import from going
+  stale (section 5.2). *Why:* the IR must state what the backend emits;
+  the hash is the handshake guard for packed mode, and peers in different
+  languages must compute the same value.
 - [ ] **C6b. Implement the tagged wire shape.** With mode already in the
   model (C1b) and the corpus in place (D1), implement the byte-oriented
   tagged shape from section 5.3: byte-aligned start, LEB128 tag, LEB128
@@ -943,13 +1091,15 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   written down and tested from the decode side. This task is ordered after
   D1 in practice even though it is numbered here.
 - [ ] **C7. Define the public API and the CLI.** `lib.rs` exports exactly:
-  `compile(&CompileRequest) -> Result<(ir::Schema, SourceMap), Diagnostics>`
-  with `CompileRequest { files, import_roots }`; the `ir` module (types,
-  `Span`, `verify`); `GenerateRequest { files_to_generate }`; the
-  `Generator` trait returning `Result<Vec<GeneratedFile>, Diagnostics>`;
-  `Diagnostics` with a renderer that takes the `SourceMap`. Nothing from
-  `syntax` or `sema`; backend config is typed and passed to the backend's
-  constructor, not through string parameters. `CodeWriter` is optional: the
+  `compile(&CompileRequest) -> Compiled { schema, sources, diagnostics }`
+  with `CompileRequest { files, import_roots }` (5.2: a `Result` would drop
+  warnings on success); the `ir` module (types, `verify`) and `Span` and
+  `FileId` from `span`; `GenerateRequest { files_to_generate }` with its
+  validation and `GeneratedFile`; `Diagnostics` with a renderer that takes
+  the `SourceMap`. No `Generator` trait: a backend is a function of
+  `&ir::Schema` and `&GenerateRequest` (5.2). Nothing from `syntax` or
+  `sema`; backend config is typed and held by the backend, not passed
+  through string parameters. `CodeWriter` is optional: the
   GDScript backend has its own emitter and uses it only for tokens, so
   either keep it over `fmt::Write` or drop it. The binary becomes
   `baproto check` (diagnostics only), `baproto ir --json` (goldens and
@@ -965,7 +1115,9 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   write the bit-stream specification (section 5.4): bit order, byte order,
   float representation, varint form, string bytes, length units, the byte
   alignment rule for tagged messages, the packed and tagged message shapes,
-  the value file format and its number rules, and the hash combine function.
+  the value file format and its number rules, the canonical byte encoding
+  of a packed layout and of a full name, the hash functions over them for
+  `layout_hash` and `wire_id`, and the hash combine function (5.2).
   Match the existing GDScript runtime where it has already chosen
   (least-significant-bit-first packing, LEB128). Then
   `tests/conformance/*.baproto`, each with `values`, `bytes`, `bits`, an
@@ -1049,6 +1201,9 @@ goldens added in A2 are the pipeline's only end-to-end test until D1.
   accessor (after E8).
 - GDExtension runtime: when GDScript codec throughput is the measured
   bottleneck.
+- `baproto-ir` crate split (`span` plus `ir`, serde-only): when the module
+  dependency rule in 5.1 is broken in review, or when a backend wants IR
+  fixtures without linking the compiler.
 
 ## 7. References
 
@@ -1141,3 +1296,61 @@ per-field encoding control separate from the data, which is Ignatchenko's
 encoding declaration in standardised form, and its lack of adoption is the
 evidence against building it. Cap'n Proto's packed variant is the same
 root-level choice in a modern system: a transport option, not a schema one.
+
+### 7.4 Compiler data models and Rust type design
+
+Sources for the shape of sections 5.1 to 5.3. Each entry names what was
+taken from it.
+
+- **rustc dev guide**, chapters *Overview of the compiler*, *The HIR*,
+  *The `ty` module*, *Memory management*, *Name resolution*, *Queries*.
+  <https://rustc-dev-guide.rust-lang.org/>. One representation per job
+  (AST, HIR, THIR, MIR); HIR bodies kept out-of-band in maps keyed by
+  `HirId`; `hir::Ty` is the syntax of a type and `ty::Ty` its semantics,
+  which is the `EncodingSpec` versus `WireSpec` split; `Res::Err` continues
+  compilation after a failed resolution (`TypeRef::Error`); `DefPathHash`
+  stable across sessions beside a `DefId` that is not (`wire_id` beside
+  `TypeId`); queries need pure functions of their inputs, which the
+  immutable model gives without adopting a query system.
+- **rust-analyzer**, `docs/book/src/contributing/architecture.md` and
+  `style.md`, and `lib/la-arena`.
+  <https://github.com/rust-lang/rust-analyzer>. The `syntax` crate "knows
+  nothing" about semantics; `hir` is "a static, fully resolved view" and the
+  API boundary; derived data lives in `ArenaMap` side tables next to an
+  `Arena`; "if a field can have any value without breaking invariants,
+  make the field public", otherwise enforce it in a constructor; avoid
+  "doer objects". These fix the immutable model, the `ModeSet` side table,
+  the public IR fields, and the removal of the `Generator` trait.
+- **cranelift-entity** (`PrimaryMap`, `SecondaryMap`, `entity_impl!`) and
+  **Carbon toolchain docs** (`toolchain/docs/idioms.md`).
+  <https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/entity>,
+  <https://github.com/carbon-language/carbon-lang/tree/trunk/toolchain/docs>.
+  Typed 32-bit ids into dense vectors, side tables keyed by the same id, no
+  id stored inside the element, and a linear pass pipeline chosen on
+  purpose.
+- **Cap'n Proto `schema.capnp`**, **protobuf `descriptor.proto` and
+  `descriptor.h`**, **FlatBuffers `reflection.fbs`**. A `Node` is one
+  header (`id`, `scopeId`, `displayName`, `nestedNodes`) plus a union of
+  bodies, which is the `Type` header plus `TypeBody`; protoc's pool keys
+  symbols by dotted full name and resolves relative names by stripping
+  scope components, which is the `NameTable`; FlatBuffers references types
+  by index into flat tables.
+- **LLVM `Verifier.cpp`** and **rustc MIR validation**
+  (`rustc_mir_transform/src/validate.rs`). A verifier checks the
+  well-formedness that the type system cannot carry, and an IR may be
+  legal in one phase and not another, which is why `Optional` stays one
+  variant guarded by `verify` rather than two `WireSpec` enums.
+- **Rust API Guidelines**, *Type safety* (C-NEWTYPE, C-CUSTOM-TYPE),
+  *Interoperability* (C-COMMON-TRAITS, C-SERDE), *Future proofing*
+  (C-STRUCT-PRIVATE). <https://rust-lang.github.io/api-guidelines/>.
+  "Arguments convey meaning through types, not `bool` or `Option`" is the
+  case against per-field `Option<WireSpec>` pairs; the derive list on IR
+  types; the private-field guideline this document knowingly deviates
+  from for the IR, with the verifier as the invariant guard.
+- **The Rust Reference**, `#[non_exhaustive]`, and **serde**, *Enum
+  representations*. A non-exhaustive enum removes downstream exhaustiveness
+  checking, which is why `WireSpec` is exhaustive; internally tagged
+  representation (`#[serde(tag = "kind")]`) for the JSON form.
+- **`std::hash` documentation.** The output of `Hash` plus `DefaultHasher`
+  is not specified to be stable across Rust releases, which rules it out
+  for `layout_hash` and `wire_id` (5.2).
